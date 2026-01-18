@@ -1,10 +1,15 @@
 [project]
-name = "uv-devcontainer-template"
+name = "budgetbros-budget-api"
 version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14"
 dependencies = [
-    "glom==24.*",
-    "pytest==8.*",
+    "fastapi[standard]",
+    "sqlalchemy"
+]
+
+[dependency-groups]
+dev = [
+  "pytest"
 ]

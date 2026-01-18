@@ -1,54 +1,42 @@
-# UV Devcontainer Template
+# BudgetBros Budget API
 
-This template is designed to streamline the setup of a Python development environment using the `uv` package manager on Debian Bookworm. It's equipped with a collection of tools and extensions specifically chosen to enhance the Python development workflow, from code writing to testing and deployment.
+FastAPI service and SQLAlchemy models for a budgeting app. The API currently exposes a basic health check and a set of database tables that cover users, shared budgets, accounts, categories, payees, transactions, and tags.
 
-## Features Overview
+## What is in here
 
-| Feature                 | Description                                                                                           |
-|-------------------------|-------------------------------------------------------------------------------------------------------|
-| **Operating System**    | Debian Bookworm, providing a stable foundation for development.                                       |
-| **Package Management**  | `uv`, a lightweight and efficient package and environment manager.                                    |
-| **Programming Language**| Python, ready for development right out of the box.                                                  |
-| **Version Control**     | Git integrated for robust version control.                                                           |
-| **VSCode Extensions**   | A curated list of VSCode extensions installed, including essentials for Python development.           |
-| **Testing Framework**   | Pytest configured to run tests from the `tests` directory, utilizing VSCode's test runner for ease of testing. |
+- **FastAPI app**: `budget_api.main:app` with `GET /` returning `{"status": "ok"}`.
+- **SQLAlchemy models**: `budget_api.tables` defines the core budgeting schema, including transfers, splits, and tagging.
 
-## Getting Started
+## Requirements
 
-1. **Clone and Open**: Clone this repository and open it in VSCode. The project will prompt to reopen in a devcontainer.
-1. **Dev Environment Initialization**: The `uv sync` task can be run manually, preparing and updating your development environment.
-1. **Rename the Project Directory**: Rename the `/project` directory to match the name of your new project to get started. Update the project name in the pyproject.toml file as well.
+- Python 3.14+
+- `uv` (recommended) or another Python environment manager
 
-## Managing Dependencies
+## Setup
 
-- **Application Dependencies**: Defined in `pyproject.toml`. A frozen set of these dependencies is created and stored in `uv.lock` for reproducible deployments.
+```bash
+uv sync
+```
 
-## Running Tests
+## Run the API
 
-Tests are run using VSCode's integrated test runner:
+```bash
+uv run fastapi dev budget_api
+```
 
-1. Navigate to the testing sidebar in VSCode.
-1. You'll see your tests listed there. Test can be run directly from the UI.
+The API will be available at `http://127.0.0.1:8000`.
 
-## Running the Application
+## Run tests
 
-VSCode's `launch.json` is configured to debug the currently open Python file, allowing you to run and debug any part of your project easily.
+```bash
+uv run pytest
+```
 
-> Note: You may need to tweak `launch.json` for specific project requirements, such as adding arguments or setting environment variables.
+## Notes
 
-### Quick Start
-
-- Open `project/main.py` or any Python file you intend to run.
-- Use `F5` or the green play button in the "Run and Debug" sidebar to start debugging.
-
-## Deployment
-
-Deploy your application using the dependencies detailed in `uv.lock` to guarantee that your deployment mirrors the tested state of your application.
-
-## Contributing
-
-We welcome contributions to improve the `uv-devcontainer-template`. Please follow the standard fork and pull request workflow. Make sure to add tests for new features and update the documentation as necessary.
+- Database models are defined, but migrations and database wiring are not yet set up.
+- Transaction amounts use signed integer minor units (cents) in `transaction_lines.amount_minor`.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE.md).
+MIT. See `LICENSE`.

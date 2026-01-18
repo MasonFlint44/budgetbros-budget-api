@@ -24,6 +24,23 @@ class Base(DeclarativeBase):
 
 
 # -----------------------
+# Reference data
+# -----------------------
+
+
+class Currency(Base):
+    __tablename__ = "currencies"
+
+    code: Mapped[str] = mapped_column(String(3), primary_key=True)
+    name: Mapped[str] = mapped_column(String(60), nullable=False)
+    symbol: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
+    minor_unit: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+
+    budgets: Mapped[List["Budget"]] = relationship(back_populates="base_currency")
+    accounts: Mapped[List["Account"]] = relationship(back_populates="currency")
+
+
+# -----------------------
 # Core identity + sharing
 # -----------------------
 
@@ -58,12 +75,17 @@ class Budget(Base):
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
 
-    # Useful default; transactions ultimately use account currency.
-    base_currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    base_currency_code: Mapped[str] = mapped_column(
+        String(3),
+        ForeignKey("currencies.code", ondelete="RESTRICT"),
+        nullable=False,
+    )
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+
+    base_currency: Mapped["Currency"] = relationship(back_populates="budgets")
 
     members: Mapped[List["BudgetMember"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
@@ -137,7 +159,11 @@ class Account(Base):
     # Keep as string for flexibility: checking/savings/credit_card/cash/loan/investment/asset/liability
     type: Mapped[str] = mapped_column(String(30), nullable=False, default="checking")
 
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency_code: Mapped[str] = mapped_column(
+        String(3),
+        ForeignKey("currencies.code", ondelete="RESTRICT"),
+        nullable=False,
+    )
     is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -145,6 +171,7 @@ class Account(Base):
     )
 
     budget: Mapped["Budget"] = relationship(back_populates="accounts")
+    currency: Mapped["Currency"] = relationship(back_populates="accounts")
     lines: Mapped[List["TransactionLine"]] = relationship(back_populates="account")
 
     __table_args__ = (

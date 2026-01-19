@@ -55,3 +55,30 @@ async def test_list_budgets(app, async_client, seeded_currencies) -> None:
     assert payload[1]["base_currency_code"] == "EUR"
     assert "id" in payload[0]
     assert "created_at" in payload[0]
+
+
+async def test_update_budget(app, async_client, seeded_currencies) -> None:
+    response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+
+    assert response.status_code == 201
+    budget_id = response.json()["id"]
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}",
+        json={"name": "Updated", "base_currency_code": "EUR"},
+    )
+
+    assert update_response.status_code == 200
+    payload = update_response.json()
+    assert payload["id"] == budget_id
+    assert payload["name"] == "Updated"
+    assert payload["base_currency_code"] == "EUR"
+
+    async with get_test_session() as session:
+        budget = await session.get(Budget, UUID(budget_id))
+
+        assert budget is not None
+        assert budget.name == "Updated"
+        assert budget.base_currency_code == "EUR"

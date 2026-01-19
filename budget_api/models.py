@@ -11,6 +11,11 @@ class BudgetCreate(BaseModel):
     base_currency_code: str = Field(..., min_length=3, max_length=3)
 
 
+class BudgetUpdate(BaseModel):
+    name: str | None = Field(None, min_length=1, max_length=120)
+    base_currency_code: str | None = Field(None, min_length=3, max_length=3)
+
+
 class BudgetResponse(BaseModel):
     id: uuid.UUID
     name: str

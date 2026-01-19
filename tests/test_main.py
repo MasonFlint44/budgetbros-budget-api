@@ -82,3 +82,21 @@ async def test_update_budget(app, async_client, seeded_currencies) -> None:
         assert budget is not None
         assert budget.name == "Updated"
         assert budget.base_currency_code == "EUR"
+
+
+async def test_delete_budget(app, async_client, seeded_currencies) -> None:
+    response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+
+    assert response.status_code == 201
+    budget_id = response.json()["id"]
+
+    delete_response = await async_client.delete(f"/budgets/{budget_id}")
+
+    assert delete_response.status_code == 204
+
+    async with get_test_session() as session:
+        budget = await session.get(Budget, UUID(budget_id))
+
+        assert budget is None

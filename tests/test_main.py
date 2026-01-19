@@ -31,3 +31,27 @@ async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> No
         assert budget is not None
         assert budget.name == "Household"
         assert budget.base_currency_code == "USD"
+
+
+async def test_list_budgets(app, async_client, seeded_currencies) -> None:
+    first_response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+    second_response = await async_client.post(
+        "/budgets", json={"name": "Vacation", "base_currency_code": "EUR"}
+    )
+
+    assert first_response.status_code == 201
+    assert second_response.status_code == 201
+
+    response = await async_client.get("/budgets")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 2
+    assert payload[0]["name"] == "Household"
+    assert payload[1]["name"] == "Vacation"
+    assert payload[0]["base_currency_code"] == "USD"
+    assert payload[1]["base_currency_code"] == "EUR"
+    assert "id" in payload[0]
+    assert "created_at" in payload[0]

@@ -1,10 +1,17 @@
 {
-	"image": "mcr.microsoft.com/devcontainers/base:1-bookworm",
+	"name": "budgetbros-budget-api",
+	"dockerComposeFile": "docker-compose.yml",
+	"service": "app",
+	"workspaceFolder": "/workspace",
 	"features": {
 		"ghcr.io/jsburckhardt/devcontainer-features/uv:1": {},
 		"ghcr.io/devcontainers/features/git:1": {},
 		"ghcr.io/devcontainers/features/python:1": {}
 	},
+	"containerEnv": {
+		"DATABASE_URL": "postgresql+asyncpg://budgetbros:budgetbros@postgres:5432/budgetbros"
+	},
+	"forwardPorts": [5432],
 	"customizations": {
 		"vscode": {
 			"extensions": [

@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 
 from budget_api import db
-from budget_api.routers import budgets
+from budget_api.routers import accounts, budgets
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
@@ -13,9 +13,9 @@ async def lifespan(_: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(budgets.router)
+app.include_router(accounts.router)
 
 
 @app.get("/")
 def read_root() -> dict[str, str]:
     return {"status": "ok"}
-

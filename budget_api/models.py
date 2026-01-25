@@ -49,6 +49,23 @@ class BudgetResponse(BaseModel):
     created_at: datetime
 
 
+class BudgetMemberCreate(BaseModel):
+    user_id: uuid.UUID
+
+
+@dataclass(frozen=True, slots=True)
+class BudgetMember:
+    user_id: uuid.UUID
+    email: str
+    joined_at: datetime
+
+
+class BudgetMemberResponse(BaseModel):
+    user_id: uuid.UUID
+    email: str
+    joined_at: datetime
+
+
 class AccountType(str, Enum):
     checking = "checking"
     savings = "savings"

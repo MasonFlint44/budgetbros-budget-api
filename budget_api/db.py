@@ -28,7 +28,7 @@ def _create_engine(database_url: str) -> AsyncEngine:
 
 
 def init_engine(database_url: str) -> None:
-    global _engine, _sessionmaker
+    global _engine, _sessionmaker   # pylint: disable=global-statement
     _engine = _create_engine(database_url)
     _sessionmaker = async_sessionmaker(bind=_engine, autoflush=False, autocommit=False)
 
@@ -62,7 +62,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 def reset_engine() -> None:
-    global _engine, _sessionmaker
+    global _engine, _sessionmaker   # pylint: disable=global-statement
     if _engine is not None:
         _engine.sync_engine.dispose()
     _engine = None

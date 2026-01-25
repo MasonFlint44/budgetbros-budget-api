@@ -20,8 +20,8 @@ app = FastAPI(
     dependencies=[Depends(get_or_create_current_user)],
     lifespan=lifespan,
 )
-app.include_router(budgets.router)
-app.include_router(accounts.router)
+app.include_router(budgets.router, tags=["budgets"])
+app.include_router(accounts.router, tags=["accounts"])
 
 
 @app.get("/")

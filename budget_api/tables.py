@@ -77,6 +77,9 @@ class BudgetsTable(Base):
         UUID(as_uuid=True), primary_key=True, default=uuid.uuid4
     )
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("users.id", ondelete="RESTRICT"), nullable=False
+    )
 
     base_currency_code: Mapped[str] = mapped_column(
         String(3),

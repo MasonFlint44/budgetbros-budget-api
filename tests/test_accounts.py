@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from budget_api.tables import Account
-from tests.conftest import get_test_session
+from budget_api.tables import AccountsTable
+from tests.conftest import get_test_db_session
 
 
 async def create_budget(async_client) -> str:
@@ -52,8 +52,8 @@ async def test_account_persists_in_db(app, async_client, seeded_currencies) -> N
     assert response.status_code == 201
     account_id = UUID(response.json()["id"])
 
-    async with get_test_session() as session:
-        account = await session.get(Account, account_id)
+    async with get_test_db_session() as session:
+        account = await session.get(AccountsTable, account_id)
 
         assert account is not None
         assert account.name == "Checking"
@@ -134,8 +134,8 @@ async def test_update_account(app, async_client, seeded_currencies) -> None:
     assert payload["currency_code"] == "EUR"
     assert payload["is_closed"] is True
 
-    async with get_test_session() as session:
-        account = await session.get(Account, UUID(account_id))
+    async with get_test_db_session() as session:
+        account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is not None
         assert account.name == "Updated"
@@ -164,8 +164,8 @@ async def test_delete_account(app, async_client, seeded_currencies) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_test_session() as session:
-        account = await session.get(Account, UUID(account_id))
+    async with get_test_db_session() as session:
+        account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is None
 
@@ -405,9 +405,7 @@ async def test_update_account_validates_payload(
     assert update_response.status_code == 422
 
 
-async def test_update_account_not_found(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_not_found(app, async_client, seeded_currencies) -> None:
     update_response = await async_client.patch(
         "/accounts/00000000-0000-0000-0000-000000000000",
         json={"name": "Updated"},
@@ -417,9 +415,7 @@ async def test_update_account_not_found(
     assert update_response.json()["detail"] == "Account not found."
 
 
-async def test_update_account_invalid_id(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_invalid_id(app, async_client, seeded_currencies) -> None:
     update_response = await async_client.patch(
         "/accounts/not-a-uuid", json={"name": "Updated"}
     )
@@ -488,9 +484,7 @@ async def test_update_account_rejects_duplicate_name(
     assert update_response.json()["detail"] == "Account name already exists."
 
 
-async def test_delete_account_not_found(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_delete_account_not_found(app, async_client, seeded_currencies) -> None:
     delete_response = await async_client.delete(
         "/accounts/00000000-0000-0000-0000-000000000000"
     )
@@ -499,9 +493,7 @@ async def test_delete_account_not_found(
     assert delete_response.json()["detail"] == "Account not found."
 
 
-async def test_delete_account_invalid_id(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_delete_account_invalid_id(app, async_client, seeded_currencies) -> None:
     delete_response = await async_client.delete("/accounts/not-a-uuid")
 
     assert delete_response.status_code == 422

@@ -28,7 +28,7 @@ class Base(DeclarativeBase):
 # -----------------------
 
 
-class Currency(Base):
+class CurrenciesTable(Base):
     __tablename__ = "currencies"
 
     code: Mapped[str] = mapped_column(String(3), primary_key=True)
@@ -36,8 +36,8 @@ class Currency(Base):
     symbol: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
     minor_unit: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
 
-    budgets: Mapped[List["Budget"]] = relationship(back_populates="base_currency")
-    accounts: Mapped[List["Account"]] = relationship(back_populates="currency")
+    budgets: Mapped[List["BudgetsTable"]] = relationship(back_populates="base_currency")
+    accounts: Mapped[List["AccountsTable"]] = relationship(back_populates="currency")
 
 
 # -----------------------
@@ -45,7 +45,7 @@ class Currency(Base):
 # -----------------------
 
 
-class User(Base):
+class UsersTable(Base):
     __tablename__ = "users"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -55,19 +55,22 @@ class User(Base):
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
 
-    budget_memberships: Mapped[List["BudgetMember"]] = relationship(
+    budget_memberships: Mapped[List["BudgetMembersTable"]] = relationship(
         back_populates="user", cascade="all, delete-orphan"
     )
 
-    budgets: Mapped[List["Budget"]] = relationship(
+    budgets: Mapped[List["BudgetsTable"]] = relationship(
         secondary="budget_members",
         back_populates="users",
         viewonly=True,
     )
 
 
-class Budget(Base):
+class BudgetsTable(Base):
     __tablename__ = "budgets"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -85,33 +88,33 @@ class Budget(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    base_currency: Mapped["Currency"] = relationship(back_populates="budgets")
+    base_currency: Mapped["CurrenciesTable"] = relationship(back_populates="budgets")
 
-    members: Mapped[List["BudgetMember"]] = relationship(
+    members: Mapped[List["BudgetMembersTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
-    users: Mapped[List["User"]] = relationship(
+    users: Mapped[List["UsersTable"]] = relationship(
         secondary="budget_members", back_populates="budgets", viewonly=True
     )
 
-    accounts: Mapped[List["Account"]] = relationship(
+    accounts: Mapped[List["AccountsTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
-    categories: Mapped[List["Category"]] = relationship(
+    categories: Mapped[List["CategoriesTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
-    payees: Mapped[List["Payee"]] = relationship(
+    payees: Mapped[List["PayeesTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
-    transactions: Mapped[List["Transaction"]] = relationship(
+    transactions: Mapped[List["TransactionsTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
-    tags: Mapped[List["Tag"]] = relationship(
+    tags: Mapped[List["TagsTable"]] = relationship(
         back_populates="budget", cascade="all, delete-orphan"
     )
 
 
-class BudgetMember(Base):
+class BudgetMembersTable(Base):
     __tablename__ = "budget_members"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -129,8 +132,8 @@ class BudgetMember(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    user: Mapped["User"] = relationship(back_populates="budget_memberships")
-    budget: Mapped["Budget"] = relationship(back_populates="members")
+    user: Mapped["UsersTable"] = relationship(back_populates="budget_memberships")
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="members")
 
     __table_args__ = (
         UniqueConstraint("budget_id", "user_id", name="uq_budget_members_budget_user"),
@@ -144,7 +147,7 @@ class BudgetMember(Base):
 # -----------------------
 
 
-class Account(Base):
+class AccountsTable(Base):
     __tablename__ = "accounts"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -170,9 +173,11 @@ class Account(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    budget: Mapped["Budget"] = relationship(back_populates="accounts")
-    currency: Mapped["Currency"] = relationship(back_populates="accounts")
-    lines: Mapped[List["TransactionLine"]] = relationship(back_populates="account")
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="accounts")
+    currency: Mapped["CurrenciesTable"] = relationship(back_populates="accounts")
+    lines: Mapped[List["TransactionLinesTable"]] = relationship(
+        back_populates="account"
+    )
 
     __table_args__ = (
         UniqueConstraint("budget_id", "name", name="uq_accounts_budget_name"),
@@ -180,7 +185,7 @@ class Account(Base):
     )
 
 
-class Category(Base):
+class CategoriesTable(Base):
     __tablename__ = "categories"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -204,14 +209,16 @@ class Category(Base):
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
-    budget: Mapped["Budget"] = relationship(back_populates="categories")
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="categories")
 
-    parent: Mapped[Optional["Category"]] = relationship(
-        remote_side="Category.id", back_populates="children"
+    parent: Mapped[Optional["CategoriesTable"]] = relationship(
+        remote_side="CategoriesTable.id", back_populates="children"
     )
-    children: Mapped[List["Category"]] = relationship(back_populates="parent")
+    children: Mapped[List["CategoriesTable"]] = relationship(back_populates="parent")
 
-    lines: Mapped[List["TransactionLine"]] = relationship(back_populates="category")
+    lines: Mapped[List["TransactionLinesTable"]] = relationship(
+        back_populates="category"
+    )
 
     __table_args__ = (
         UniqueConstraint("budget_id", "name", name="uq_categories_budget_name"),
@@ -220,7 +227,7 @@ class Category(Base):
     )
 
 
-class Payee(Base):
+class PayeesTable(Base):
     __tablename__ = "payees"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -233,8 +240,8 @@ class Payee(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
-    budget: Mapped["Budget"] = relationship(back_populates="payees")
-    lines: Mapped[List["TransactionLine"]] = relationship(back_populates="payee")
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="payees")
+    lines: Mapped[List["TransactionLinesTable"]] = relationship(back_populates="payee")
 
     __table_args__ = (
         UniqueConstraint("budget_id", "name", name="uq_payees_budget_name"),
@@ -247,7 +254,7 @@ class Payee(Base):
 # -----------------------
 
 
-class Transaction(Base):
+class TransactionsTable(Base):
     __tablename__ = "transactions"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -272,8 +279,8 @@ class Transaction(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    budget: Mapped["Budget"] = relationship(back_populates="transactions")
-    lines: Mapped[List["TransactionLine"]] = relationship(
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="transactions")
+    lines: Mapped[List["TransactionLinesTable"]] = relationship(
         back_populates="transaction", cascade="all, delete-orphan"
     )
 
@@ -285,7 +292,7 @@ class Transaction(Base):
     )
 
 
-class TransactionLine(Base):
+class TransactionLinesTable(Base):
     """
     A single leg of a transaction.
 
@@ -333,17 +340,17 @@ class TransactionLine(Base):
     amount_minor: Mapped[int] = mapped_column(Integer, nullable=False)
     memo: Mapped[Optional[str]] = mapped_column(String(300), nullable=True)
 
-    transaction: Mapped["Transaction"] = relationship(back_populates="lines")
-    account: Mapped["Account"] = relationship(back_populates="lines")
-    category: Mapped[Optional["Category"]] = relationship(back_populates="lines")
-    payee: Mapped[Optional["Payee"]] = relationship(back_populates="lines")
+    transaction: Mapped["TransactionsTable"] = relationship(back_populates="lines")
+    account: Mapped["AccountsTable"] = relationship(back_populates="lines")
+    category: Mapped[Optional["CategoriesTable"]] = relationship(back_populates="lines")
+    payee: Mapped[Optional["PayeesTable"]] = relationship(back_populates="lines")
 
-    tags: Mapped[List["Tag"]] = relationship(
+    tags: Mapped[List["TagsTable"]] = relationship(
         secondary="transaction_line_tags",
         back_populates="lines",
         viewonly=True,
     )
-    tag_links: Mapped[List["TransactionLineTag"]] = relationship(
+    tag_links: Mapped[List["TransactionLineTagsTable"]] = relationship(
         back_populates="line", cascade="all, delete-orphan"
     )
 
@@ -364,7 +371,7 @@ class TransactionLine(Base):
 # -----------------------
 
 
-class Tag(Base):
+class TagsTable(Base):
     __tablename__ = "tags"
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -376,14 +383,14 @@ class Tag(Base):
 
     name: Mapped[str] = mapped_column(String(60), nullable=False)
 
-    budget: Mapped["Budget"] = relationship(back_populates="tags")
+    budget: Mapped["BudgetsTable"] = relationship(back_populates="tags")
 
-    lines: Mapped[List["TransactionLine"]] = relationship(
+    lines: Mapped[List["TransactionLinesTable"]] = relationship(
         secondary="transaction_line_tags",
         back_populates="tags",
         viewonly=True,
     )
-    line_links: Mapped[List["TransactionLineTag"]] = relationship(
+    line_links: Mapped[List["TransactionLineTagsTable"]] = relationship(
         back_populates="tag", cascade="all, delete-orphan"
     )
 
@@ -393,7 +400,7 @@ class Tag(Base):
     )
 
 
-class TransactionLineTag(Base):
+class TransactionLineTagsTable(Base):
     __tablename__ = "transaction_line_tags"
 
     line_id: Mapped[uuid.UUID] = mapped_column(
@@ -411,7 +418,7 @@ class TransactionLineTag(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
 
-    line: Mapped["TransactionLine"] = relationship(back_populates="tag_links")
-    tag: Mapped["Tag"] = relationship(back_populates="line_links")
+    line: Mapped["TransactionLinesTable"] = relationship(back_populates="tag_links")
+    tag: Mapped["TagsTable"] = relationship(back_populates="line_links")
 
     __table_args__ = (Index("ix_transaction_line_tags_tag_id", "tag_id"),)

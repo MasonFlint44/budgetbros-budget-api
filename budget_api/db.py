@@ -3,7 +3,12 @@ from __future__ import annotations
 import os
 from typing import AsyncIterator, Optional
 
-from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
+from sqlalchemy.ext.asyncio import (
+    AsyncEngine,
+    AsyncSession,
+    async_sessionmaker,
+    create_async_engine,
+)
 from budget_api.tables import Base
 
 _engine: Optional[AsyncEngine] = None

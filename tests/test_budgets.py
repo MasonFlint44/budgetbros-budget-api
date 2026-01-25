@@ -1,7 +1,7 @@
 from uuid import UUID
 
-from budget_api.tables import Budget
-from tests.conftest import get_test_session
+from budget_api.tables import BudgetsTable
+from tests.conftest import get_test_db_session
 
 
 async def test_create_budget(app, async_client, seeded_currencies) -> None:
@@ -25,8 +25,8 @@ async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> No
     assert response.status_code == 201
     budget_id = UUID(response.json()["id"])
 
-    async with get_test_session() as session:
-        budget = await session.get(Budget, budget_id)
+    async with get_test_db_session() as session:
+        budget = await session.get(BudgetsTable, budget_id)
 
         assert budget is not None
         assert budget.name == "Household"
@@ -76,8 +76,8 @@ async def test_update_budget(app, async_client, seeded_currencies) -> None:
     assert payload["name"] == "Updated"
     assert payload["base_currency_code"] == "EUR"
 
-    async with get_test_session() as session:
-        budget = await session.get(Budget, UUID(budget_id))
+    async with get_test_db_session() as session:
+        budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is not None
         assert budget.name == "Updated"
@@ -96,8 +96,8 @@ async def test_delete_budget(app, async_client, seeded_currencies) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_test_session() as session:
-        budget = await session.get(Budget, UUID(budget_id))
+    async with get_test_db_session() as session:
+        budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is None
 
@@ -140,7 +140,9 @@ async def test_create_budget_rejects_unknown_currency(
     assert response.json()["detail"] == "Unknown base currency code."
 
 
-async def test_create_budget_validates_payload(app, async_client, seeded_currencies) -> None:
+async def test_create_budget_validates_payload(
+    app, async_client, seeded_currencies
+) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "", "base_currency_code": "US"}
     )

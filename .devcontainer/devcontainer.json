@@ -9,7 +9,9 @@
 		"ghcr.io/devcontainers/features/python:1": {}
 	},
 	"containerEnv": {
-		"DATABASE_URL": "postgresql+asyncpg://budgetbros:budgetbros@postgres:5432/budgetbros"
+		"DATABASE_URL": "postgresql+asyncpg://budgetbros:budgetbros@postgres:5432/budgetbros",
+		"COGNITO_ISSUER": "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_LqiRYd1FD",
+		"COGNITO_CLIENT_IDS": "555epl19epj9i0erat76c44803"
 	},
 	"forwardPorts": [5432],
 	"customizations": {

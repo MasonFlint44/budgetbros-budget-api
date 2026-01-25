@@ -6,16 +6,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api import db
 from budget_api.models import AccountCreate, AccountResponse, AccountUpdate
-from budget_api.tables import Account, Budget, Currency
+from budget_api.tables import AccountsTable, BudgetsTable, CurrenciesTable
 
 router = APIRouter()
 
 
-@router.post("/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_account(
     payload: AccountCreate, session: AsyncSession = Depends(db.get_session)
-) -> Account:
-    budget = await session.get(Budget, payload.budget_id)
+) -> AccountsTable:
+    budget = await session.get(BudgetsTable, payload.budget_id)
     if budget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -24,7 +26,7 @@ async def create_account(
 
     currency_code = payload.currency_code.upper()
     result = await session.execute(
-        select(Currency).where(Currency.code == currency_code)
+        select(CurrenciesTable).where(CurrenciesTable.code == currency_code)
     )
     currency = result.scalar_one_or_none()
     if currency is None:
@@ -34,9 +36,9 @@ async def create_account(
         )
 
     existing_account = await session.execute(
-        select(Account).where(
-            Account.budget_id == payload.budget_id,
-            Account.name == payload.name,
+        select(AccountsTable).where(
+            AccountsTable.budget_id == payload.budget_id,
+            AccountsTable.name == payload.name,
         )
     )
     if existing_account.scalar_one_or_none() is not None:
@@ -45,7 +47,7 @@ async def create_account(
             detail="Account name already exists.",
         )
 
-    account = Account(
+    account = AccountsTable(
         budget_id=payload.budget_id,
         name=payload.name,
         type=payload.type,
@@ -60,10 +62,9 @@ async def create_account(
 
 @router.get("/budgets/{budget_id}/accounts", response_model=list[AccountResponse])
 async def list_accounts(
-    budget_id: uuid.UUID,
-    session: AsyncSession = Depends(db.get_session),
-) -> list[Account]:
-    budget = await session.get(Budget, budget_id)
+    budget_id: uuid.UUID, session: AsyncSession = Depends(db.get_session)
+) -> list[AccountsTable]:
+    budget = await session.get(BudgetsTable, budget_id)
     if budget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -71,9 +72,9 @@ async def list_accounts(
         )
 
     result = await session.execute(
-        select(Account)
-        .where(Account.budget_id == budget_id)
-        .order_by(Account.created_at)
+        select(AccountsTable)
+        .where(AccountsTable.budget_id == budget_id)
+        .order_by(AccountsTable.created_at)
     )
     return list(result.scalars())
 
@@ -83,8 +84,8 @@ async def update_account(
     account_id: uuid.UUID,
     payload: AccountUpdate,
     session: AsyncSession = Depends(db.get_session),
-) -> Account:
-    account = await session.get(Account, account_id)
+) -> AccountsTable:
+    account = await session.get(AccountsTable, account_id)
     if account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -101,7 +102,7 @@ async def update_account(
     if "currency_code" in updates:
         currency_code = updates["currency_code"].upper()
         result = await session.execute(
-            select(Currency).where(Currency.code == currency_code)
+            select(CurrenciesTable).where(CurrenciesTable.code == currency_code)
         )
         currency = result.scalar_one_or_none()
         if currency is None:
@@ -113,10 +114,10 @@ async def update_account(
 
     if "name" in updates:
         existing_account = await session.execute(
-            select(Account).where(
-                Account.budget_id == account.budget_id,
-                Account.name == updates["name"],
-                Account.id != account.id,
+            select(AccountsTable).where(
+                AccountsTable.budget_id == account.budget_id,
+                AccountsTable.name == updates["name"],
+                AccountsTable.id != account.id,
             )
         )
         if existing_account.scalar_one_or_none() is not None:
@@ -139,10 +140,9 @@ async def update_account(
 
 @router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_account(
-    account_id: uuid.UUID,
-    session: AsyncSession = Depends(db.get_session),
+    account_id: uuid.UUID, session: AsyncSession = Depends(db.get_session)
 ) -> None:
-    account = await session.get(Account, account_id)
+    account = await session.get(AccountsTable, account_id)
     if account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,

@@ -1,12 +1,12 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
-
-from budget_api import db
-from budget_api.models import AccountCreate, AccountResponse, AccountUpdate
-from budget_api.tables import AccountsTable, BudgetsTable, CurrenciesTable
+from budget_api.data_access import (
+    AccountsDataAccess,
+    BudgetsDataAccess,
+    CurrenciesDataAccess,
+)
+from budget_api.models import Account, AccountCreate, AccountResponse, AccountUpdate
 
 router = APIRouter()
 
@@ -15,9 +15,12 @@ router = APIRouter()
     "/accounts", response_model=AccountResponse, status_code=status.HTTP_201_CREATED
 )
 async def create_account(
-    payload: AccountCreate, session: AsyncSession = Depends(db.get_session)
-) -> AccountsTable:
-    budget = await session.get(BudgetsTable, payload.budget_id)
+    payload: AccountCreate,
+    accounts_store: AccountsDataAccess = Depends(),
+    budgets_store: BudgetsDataAccess = Depends(),
+    currencies_store: CurrenciesDataAccess = Depends(),
+) -> Account:
+    budget = await budgets_store.get_budget(payload.budget_id)
     if budget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -25,67 +28,55 @@ async def create_account(
         )
 
     currency_code = payload.currency_code.upper()
-    result = await session.execute(
-        select(CurrenciesTable).where(CurrenciesTable.code == currency_code)
-    )
-    currency = result.scalar_one_or_none()
+    currency = await currencies_store.get_currency(currency_code)
     if currency is None:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Unknown currency code.",
         )
 
-    existing_account = await session.execute(
-        select(AccountsTable).where(
-            AccountsTable.budget_id == payload.budget_id,
-            AccountsTable.name == payload.name,
-        )
+    existing_account = await accounts_store.get_account_by_name(
+        payload.budget_id, payload.name
     )
-    if existing_account.scalar_one_or_none() is not None:
+    if existing_account is not None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Account name already exists.",
         )
 
-    account = AccountsTable(
+    return await accounts_store.create_account(
         budget_id=payload.budget_id,
         name=payload.name,
         type=payload.type,
         currency_code=currency_code,
         is_closed=payload.is_closed,
     )
-    session.add(account)
-    await session.flush()
-    await session.refresh(account)
-    return account
 
 
 @router.get("/budgets/{budget_id}/accounts", response_model=list[AccountResponse])
 async def list_accounts(
-    budget_id: uuid.UUID, session: AsyncSession = Depends(db.get_session)
-) -> list[AccountsTable]:
-    budget = await session.get(BudgetsTable, budget_id)
+    budget_id: uuid.UUID,
+    accounts_store: AccountsDataAccess = Depends(),
+    budgets_store: BudgetsDataAccess = Depends(),
+) -> list[Account]:
+    budget = await budgets_store.get_budget(budget_id)
     if budget is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Budget not found.",
         )
 
-    result = await session.execute(
-        select(AccountsTable)
-        .where(AccountsTable.budget_id == budget_id)
-        .order_by(AccountsTable.created_at)
-    )
-    return list(result.scalars())
+    return await accounts_store.list_accounts(budget_id)
 
 
 @router.patch("/accounts/{account_id}", response_model=AccountResponse)
 async def update_account(
     account_id: uuid.UUID,
     payload: AccountUpdate,
-    session: AsyncSession = Depends(db.get_session),
-) -> AccountsTable:
-    account = await session.get(AccountsTable, account_id)
+    accounts_store: AccountsDataAccess = Depends(),
+    currencies_store: CurrenciesDataAccess = Depends(),
+) -> Account:
+    account = await accounts_store.get_account(account_id)
     if account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -101,52 +92,45 @@ async def update_account(
 
     if "currency_code" in updates:
         currency_code = updates["currency_code"].upper()
-        result = await session.execute(
-            select(CurrenciesTable).where(CurrenciesTable.code == currency_code)
-        )
-        currency = result.scalar_one_or_none()
+        currency = await currencies_store.get_currency(currency_code)
         if currency is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Unknown currency code.",
             )
-        account.currency_code = currency_code
 
     if "name" in updates:
-        existing_account = await session.execute(
-            select(AccountsTable).where(
-                AccountsTable.budget_id == account.budget_id,
-                AccountsTable.name == updates["name"],
-                AccountsTable.id != account.id,
-            )
+        existing_account = await accounts_store.get_account_by_name(
+            account.budget_id,
+            updates["name"],
+            exclude_account_id=account.id,
         )
-        if existing_account.scalar_one_or_none() is not None:
+        if existing_account is not None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail="Account name already exists.",
             )
-        account.name = updates["name"]
 
-    if "type" in updates:
-        account.type = updates["type"]
+    if "currency_code" in updates:
+        updates["currency_code"] = currency_code
 
-    if "is_closed" in updates:
-        account.is_closed = updates["is_closed"]
-
-    await session.flush()
-    await session.refresh(account)
-    return account
-
-
-@router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
-async def delete_account(
-    account_id: uuid.UUID, session: AsyncSession = Depends(db.get_session)
-) -> None:
-    account = await session.get(AccountsTable, account_id)
-    if account is None:
+    updated_account = await accounts_store.update_account(account_id, updates)
+    if updated_account is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Account not found.",
         )
-    await session.delete(account)
-    await session.flush()
+    return updated_account
+
+
+@router.delete("/accounts/{account_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_account(
+    account_id: uuid.UUID,
+    accounts_store: AccountsDataAccess = Depends(),
+) -> None:
+    deleted = await accounts_store.delete(account_id)
+    if not deleted:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Account not found.",
+        )

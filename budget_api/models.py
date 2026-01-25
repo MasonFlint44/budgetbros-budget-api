@@ -16,6 +16,22 @@ class User:
     last_seen_at: datetime
 
 
+@dataclass(frozen=True, slots=True)
+class Currency:
+    code: str
+    name: str
+    symbol: str | None
+    minor_unit: int
+
+
+@dataclass(frozen=True, slots=True)
+class Budget:
+    id: uuid.UUID
+    name: str
+    base_currency_code: str
+    created_at: datetime
+
+
 class BudgetCreate(BaseModel):
     name: str = Field(..., min_length=1, max_length=120)
     base_currency_code: str = Field(..., min_length=3, max_length=3)
@@ -60,6 +76,17 @@ class AccountUpdate(BaseModel):
 
 
 class AccountResponse(BaseModel):
+    id: uuid.UUID
+    budget_id: uuid.UUID
+    name: str
+    type: AccountType
+    currency_code: str
+    is_closed: bool
+    created_at: datetime
+
+
+@dataclass(frozen=True, slots=True)
+class Account:
     id: uuid.UUID
     budget_id: uuid.UUID
     name: str

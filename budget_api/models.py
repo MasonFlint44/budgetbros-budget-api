@@ -24,6 +24,13 @@ class Currency:
     minor_unit: int
 
 
+class CurrencyResponse(BaseModel):
+    code: str
+    name: str
+    symbol: str | None
+    minor_unit: int
+
+
 @dataclass(frozen=True, slots=True)
 class Budget:
     id: uuid.UUID

@@ -22,6 +22,12 @@ class CurrenciesDataAccess:
             return None
         return _to_currency(currency)
 
+    async def list_currencies(self) -> list[Currency]:
+        result = await self._session.execute(
+            select(CurrenciesTable).order_by(CurrenciesTable.code)
+        )
+        return [_to_currency(currency) for currency in result.scalars()]
+
 
 def _to_currency(currency: CurrenciesTable) -> Currency:
     return Currency(

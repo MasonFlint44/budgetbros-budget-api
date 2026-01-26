@@ -4,7 +4,7 @@ from fastapi import FastAPI, Depends
 
 from budget_api import db
 from budget_api.auth import verifier, get_or_create_current_user
-from budget_api.routers import accounts, budgets
+from budget_api.routers import accounts, budgets, currencies
 
 
 @asynccontextmanager
@@ -22,6 +22,7 @@ app = FastAPI(
 )
 app.include_router(budgets.router, tags=["budgets"])
 app.include_router(accounts.router, tags=["accounts"])
+app.include_router(currencies.router, tags=["currencies"])
 
 
 @app.get("/")

@@ -42,5 +42,5 @@
 
 ## Testing notes
 - Tests require a real Postgres DB via `DATABASE_URL`.
-- `tests/conftest.py` drops/creates schema per test session and uses `LifespanManager`.
-
+- `tests/conftest.py` drops/creates schema once per test session and uses `LifespanManager`.
+- Test data persists across tests within a session; tests must be written to tolerate existing rows (use unique identifiers/emails, and avoid asserting empty tables unless explicitly cleaned).

@@ -29,13 +29,18 @@ async def test_get_or_create_current_user_updates_last_seen() -> None:
     old_seen = datetime.now(timezone.utc) - timedelta(days=1)
 
     async with get_test_db_session() as session:
-        existing = UsersTable(
-            id=TEST_USER_ID,
-            email=TEST_USER_EMAIL,
-            created_at=old_seen,
-            last_seen_at=old_seen,
-        )
-        session.add(existing)
+        existing = await session.get(UsersTable, TEST_USER_ID)
+        if existing is None:
+            existing = UsersTable(
+                id=TEST_USER_ID,
+                email=TEST_USER_EMAIL,
+                created_at=old_seen,
+                last_seen_at=old_seen,
+            )
+            session.add(existing)
+        else:
+            existing.created_at = old_seen
+            existing.last_seen_at = old_seen
         await session.flush()
 
         user = await get_or_create_current_user(token=TEST_AUTH_TOKEN, session=session)

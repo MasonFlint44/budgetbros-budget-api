@@ -18,7 +18,7 @@ def anyio_backend():
     return ("asyncio", {"use_uvloop": True})
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 def app():
     database_url = os.environ.get("DATABASE_URL")
     if not database_url:
@@ -37,15 +37,16 @@ def override_verifier_expiry():
     verifier.verify_access_token = original_verify
 
 
-@pytest.fixture(autouse=True)
-async def db_schema(app):
+@pytest.fixture(autouse=True, scope="session")
+async def db_schema():
     engine = db.get_engine()
     async with engine.begin() as connection:
         await connection.run_sync(Base.metadata.drop_all)
         await connection.run_sync(Base.metadata.create_all)
+    yield
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def async_client(app):
     async with LifespanManager(app):
         async with AsyncClient(
@@ -69,7 +70,7 @@ async def get_test_db_session():
             pass
 
 
-@pytest.fixture
+@pytest.fixture(scope="session")
 async def seeded_currencies(async_client):
     async with get_test_db_session() as session:
         session.add_all(

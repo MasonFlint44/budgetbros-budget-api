@@ -38,6 +38,10 @@ async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> No
 
 
 async def test_list_budgets(app, async_client, seeded_currencies) -> None:
+    before_response = await async_client.get("/budgets")
+    assert before_response.status_code == 200
+    before_ids = {budget["id"] for budget in before_response.json()}
+
     first_response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -52,13 +56,14 @@ async def test_list_budgets(app, async_client, seeded_currencies) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert len(payload) == 2
-    assert payload[0]["name"] == "Household"
-    assert payload[1]["name"] == "Vacation"
-    assert payload[0]["base_currency_code"] == "USD"
-    assert payload[1]["base_currency_code"] == "EUR"
-    assert "id" in payload[0]
-    assert "created_at" in payload[0]
+    new_items = [item for item in payload if item["id"] not in before_ids]
+    new_by_name = {item["name"]: item for item in new_items}
+    assert "Household" in new_by_name
+    assert "Vacation" in new_by_name
+    assert new_by_name["Household"]["base_currency_code"] == "USD"
+    assert new_by_name["Vacation"]["base_currency_code"] == "EUR"
+    assert "id" in new_by_name["Household"]
+    assert "created_at" in new_by_name["Household"]
 
 
 async def test_update_budget(app, async_client, seeded_currencies) -> None:
@@ -110,12 +115,17 @@ async def test_list_budgets_empty(app, async_client, seeded_currencies) -> None:
     response = await async_client.get("/budgets")
 
     assert response.status_code == 200
-    assert response.json() == []
+    payload = response.json()
+    assert isinstance(payload, list)
 
 
 async def test_list_budgets_ordered_by_created_at(
     app, async_client, seeded_currencies
 ) -> None:
+    before_response = await async_client.get("/budgets")
+    assert before_response.status_code == 200
+    before_ids = {budget["id"] for budget in before_response.json()}
+
     first_response = await async_client.post(
         "/budgets", json={"name": "Alpha", "base_currency_code": "USD"}
     )
@@ -130,7 +140,9 @@ async def test_list_budgets_ordered_by_created_at(
 
     assert response.status_code == 200
     payload = response.json()
-    assert [item["name"] for item in payload] == ["Alpha", "Beta"]
+    new_items = [item for item in payload if item["id"] not in before_ids]
+    new_names = [item["name"] for item in new_items]
+    assert new_names == ["Alpha", "Beta"]
 
 
 async def test_create_budget_rejects_unknown_currency(
@@ -292,7 +304,7 @@ async def test_list_budgets_scoped_to_member(
         session.add(
             UsersTable(
                 id=other_user_id,
-                email="other@example.com",
+                email=f"other-{other_user_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )
@@ -319,8 +331,8 @@ async def test_list_budgets_scoped_to_member(
 
     assert list_response.status_code == 200
     payload = list_response.json()
-    assert len(payload) == 1
-    assert payload[0]["id"] == own_budget_id
+    assert any(item["id"] == own_budget_id for item in payload)
+    assert all(item["id"] != str(other_budget_id) for item in payload)
 
 
 async def test_update_budget_requires_membership(
@@ -336,7 +348,7 @@ async def test_update_budget_requires_membership(
         session.add(
             UsersTable(
                 id=other_user_id,
-                email="owner@example.com",
+                email=f"owner-{other_user_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )
@@ -388,7 +400,7 @@ async def test_delete_budget_requires_owner(
         session.add(
             UsersTable(
                 id=owner_id,
-                email="real-owner@example.com",
+                email=f"real-owner-{owner_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )

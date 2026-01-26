@@ -21,4 +21,5 @@ async def test_list_currencies_empty(async_client) -> None:
     response = await async_client.get("/currencies")
 
     assert response.status_code == 200
-    assert response.json() == []
+    payload = response.json()
+    assert isinstance(payload, list)

@@ -47,7 +47,7 @@ async def test_add_and_remove_budget_member(
         session.add(
             UsersTable(
                 id=new_user_id,
-                email="member@example.com",
+                email=f"member-{new_user_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )
@@ -102,7 +102,7 @@ async def test_delete_budget_removes_memberships(
         session.add(
             UsersTable(
                 id=extra_user_id,
-                email="extra-member@example.com",
+                email=f"extra-member-{extra_user_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )
@@ -148,12 +148,13 @@ async def test_list_budget_members(
     budget_id = UUID(response.json()["id"])
     extra_user_id = uuid4()
     now = datetime.now(timezone.utc)
+    extra_email = f"team-member-{extra_user_id}@example.com"
 
     async with get_test_db_session() as session:
         session.add(
             UsersTable(
                 id=extra_user_id,
-                email="team-member@example.com",
+                email=extra_email,
                 created_at=now,
                 last_seen_at=now,
             )
@@ -173,7 +174,7 @@ async def test_list_budget_members(
     assert len(payload) == 2
     assert {member["email"] for member in payload} == {
         "masonflint44@gmail.com",
-        "team-member@example.com",
+        extra_email,
     }
 
 
@@ -188,7 +189,7 @@ async def test_list_budget_members_rejects_non_member(
         session.add(
             UsersTable(
                 id=owner_id,
-                email="owner@example.com",
+                email=f"owner-{owner_id}@example.com",
                 created_at=now,
                 last_seen_at=now,
             )
@@ -230,13 +231,13 @@ async def test_add_budget_member_requires_owner(
             [
                 UsersTable(
                     id=owner_id,
-                    email="owner@example.com",
+                    email=f"owner-{owner_id}@example.com",
                     created_at=now,
                     last_seen_at=now,
                 ),
                 UsersTable(
                     id=new_member_id,
-                    email="new-member@example.com",
+                    email=f"new-member-{new_member_id}@example.com",
                     created_at=now,
                     last_seen_at=now,
                 ),
@@ -282,13 +283,13 @@ async def test_remove_budget_member_requires_owner(
             [
                 UsersTable(
                     id=owner_id,
-                    email="owner2@example.com",
+                    email=f"owner2-{owner_id}@example.com",
                     created_at=now,
                     last_seen_at=now,
                 ),
                 UsersTable(
                     id=existing_member_id,
-                    email="member2@example.com",
+                    email=f"member2-{existing_member_id}@example.com",
                     created_at=now,
                     last_seen_at=now,
                 ),

@@ -31,8 +31,8 @@ def app():
 def override_verifier_expiry():
     original_verify = verifier.verify_access_token
     verifier.verify_access_token = (
-        verifier._verify_access_token_allow_expired
-    )  # pylint: disable=protected-access
+        verifier._verify_access_token_allow_expired # pylint: disable=protected-access
+    )
     yield
     verifier.verify_access_token = original_verify
 

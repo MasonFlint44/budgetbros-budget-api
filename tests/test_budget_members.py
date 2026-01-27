@@ -4,7 +4,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 
 from budget_api.tables import BudgetMembersTable, BudgetsTable, UsersTable
-from budget_api.db import get_db_session
+from budget_api.db import get_session_scope
 
 
 async def test_create_budget_creates_membership(app, async_client) -> None:
@@ -15,7 +15,7 @@ async def test_create_budget_creates_membership(app, async_client) -> None:
     assert response.status_code == 201
     budget_id = UUID(response.json()["id"])
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         result = await session.execute(select(UsersTable))
         user = result.scalar_one_or_none()
         assert user is not None
@@ -39,7 +39,7 @@ async def test_add_and_remove_budget_member(app, async_client) -> None:
     new_user_id = uuid4()
     now = datetime.now(timezone.utc)
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=new_user_id,
@@ -57,7 +57,7 @@ async def test_add_and_remove_budget_member(app, async_client) -> None:
 
     assert add_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         result = await session.execute(
             select(BudgetMembersTable).where(
                 BudgetMembersTable.budget_id == budget_id,
@@ -72,7 +72,7 @@ async def test_add_and_remove_budget_member(app, async_client) -> None:
 
     assert remove_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         result = await session.execute(
             select(BudgetMembersTable).where(
                 BudgetMembersTable.budget_id == budget_id,
@@ -92,7 +92,7 @@ async def test_delete_budget_removes_memberships(app, async_client) -> None:
     extra_user_id = uuid4()
     now = datetime.now(timezone.utc)
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=extra_user_id,
@@ -110,7 +110,7 @@ async def test_delete_budget_removes_memberships(app, async_client) -> None:
 
     assert add_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         result = await session.execute(
             select(BudgetMembersTable).where(
                 BudgetMembersTable.budget_id == budget_id,
@@ -122,7 +122,7 @@ async def test_delete_budget_removes_memberships(app, async_client) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         result = await session.execute(
             select(BudgetMembersTable).where(
                 BudgetMembersTable.budget_id == budget_id,
@@ -142,7 +142,7 @@ async def test_list_budget_members(app, async_client) -> None:
     now = datetime.now(timezone.utc)
     extra_email = f"team-member-{extra_user_id}@example.com"
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=extra_user_id,
@@ -175,7 +175,7 @@ async def test_list_budget_members_rejects_non_member(app, async_client) -> None
     owner_id = uuid4()
     now = datetime.now(timezone.utc)
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=owner_id,
@@ -214,7 +214,7 @@ async def test_add_budget_member_requires_owner(app, async_client) -> None:
     budget_id = uuid4()
     new_member_id = uuid4()
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add_all(
             [
                 UsersTable(
@@ -264,7 +264,7 @@ async def test_remove_budget_member_requires_owner(app, async_client) -> None:
     budget_id = uuid4()
     existing_member_id = uuid4()
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add_all(
             [
                 UsersTable(

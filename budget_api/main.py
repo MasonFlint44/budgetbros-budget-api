@@ -12,7 +12,7 @@ from budget_api.data import CURRENCIES
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await db.init_db()
-    async with db.get_db_session() as session:
+    async with db.get_session_scope() as session:
         currencies_store = CurrenciesDataAccess(session)
         await currencies_store.seed_currencies(CURRENCIES)
     await verifier.init_keys()

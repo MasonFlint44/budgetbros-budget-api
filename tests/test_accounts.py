@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from budget_api.tables import AccountsTable
-from budget_api.db import get_db_session
+from budget_api.db import get_session_scope
 
 
 async def create_budget(async_client) -> str:
@@ -52,7 +52,7 @@ async def test_account_persists_in_db(app, async_client) -> None:
     assert response.status_code == 201
     account_id = UUID(response.json()["id"])
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         account = await session.get(AccountsTable, account_id)
 
         assert account is not None
@@ -134,7 +134,7 @@ async def test_update_account(app, async_client) -> None:
     assert payload["currency_code"] == "EUR"
     assert payload["is_closed"] is True
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is not None
@@ -164,7 +164,7 @@ async def test_delete_account(app, async_client) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is None

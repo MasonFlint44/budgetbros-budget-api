@@ -7,14 +7,14 @@ from fastapi import HTTPException
 from budget_api.auth import get_or_create_current_user
 from budget_api.tables import UsersTable
 from tests.conftest import TEST_AUTH_TOKEN
-from budget_api.db import get_db_session
+from budget_api.db import get_session_scope
 
 TEST_USER_ID = UUID("74f8e448-a061-70f2-64ce-b7a19aa3ed8a")
 TEST_USER_EMAIL = "masonflint44@gmail.com"
 
 
 async def test_get_or_create_current_user_creates_user() -> None:
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         user = await get_or_create_current_user(token=TEST_AUTH_TOKEN, session=session)
 
         assert user.id == TEST_USER_ID
@@ -29,7 +29,7 @@ async def test_get_or_create_current_user_creates_user() -> None:
 async def test_get_or_create_current_user_updates_last_seen() -> None:
     old_seen = datetime.now(timezone.utc) - timedelta(days=1)
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         existing = await session.get(UsersTable, TEST_USER_ID)
         if existing is None:
             existing = UsersTable(
@@ -53,7 +53,7 @@ async def test_get_or_create_current_user_updates_last_seen() -> None:
 
 
 async def test_get_or_create_current_user_rejects_invalid_token() -> None:
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         with pytest.raises(HTTPException) as exc:
             await get_or_create_current_user(token="not-a-token", session=session)
 

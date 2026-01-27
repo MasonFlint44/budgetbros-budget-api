@@ -63,7 +63,7 @@ async def get_session() -> AsyncIterator[AsyncSession]:
 
 
 @asynccontextmanager
-async def get_db_session():
+async def get_session_scope():
     session_generator = get_session()
     session = await anext(session_generator)
     try:

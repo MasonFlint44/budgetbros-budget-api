@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from budget_api.tables import BudgetMembersTable, BudgetsTable, UsersTable
-from budget_api.db import get_db_session
+from budget_api.db import get_session_scope
 
 
 async def test_create_budget(app, async_client) -> None:
@@ -29,7 +29,7 @@ async def test_budget_persists_in_db(app, async_client) -> None:
     assert response.status_code == 201
     budget_id = UUID(response.json()["id"])
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         budget = await session.get(BudgetsTable, budget_id)
 
         assert budget is not None
@@ -85,7 +85,7 @@ async def test_update_budget(app, async_client) -> None:
     assert payload["name"] == "Updated"
     assert payload["base_currency_code"] == "EUR"
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is not None
@@ -105,7 +105,7 @@ async def test_delete_budget(app, async_client) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is None
@@ -280,7 +280,7 @@ async def test_list_budgets_scoped_to_member(app, async_client) -> None:
     other_user_id = UUID("00000000-0000-0000-0000-000000000001")
     other_budget_id = UUID("00000000-0000-0000-0000-000000000002")
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=other_user_id,
@@ -322,7 +322,7 @@ async def test_update_budget_requires_membership(app, async_client) -> None:
     other_user_id = UUID("00000000-0000-0000-0000-000000000003")
     other_budget_id = UUID("00000000-0000-0000-0000-000000000004")
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         session.add(
             UsersTable(
                 id=other_user_id,
@@ -365,7 +365,7 @@ async def test_delete_budget_requires_owner(app, async_client) -> None:
     owner_id = UUID("00000000-0000-0000-0000-000000000005")
     shared_budget_id = UUID("00000000-0000-0000-0000-000000000006")
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         current_user = (
             await session.execute(
                 select(UsersTable).where(UsersTable.email == "masonflint44@gmail.com")
@@ -408,6 +408,6 @@ async def test_delete_budget_requires_owner(app, async_client) -> None:
     assert delete_response.status_code == 403
     assert delete_response.json()["detail"] == "Not authorized to delete budget."
 
-    async with get_db_session() as session:
+    async with get_session_scope() as session:
         budget = await session.get(BudgetsTable, shared_budget_id)
         assert budget is not None

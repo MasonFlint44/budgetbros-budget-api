@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from typing import AsyncIterator, Optional
+from contextlib import asynccontextmanager
 
 from sqlalchemy.ext.asyncio import (
     AsyncEngine,
@@ -28,7 +29,7 @@ def _create_engine(database_url: str) -> AsyncEngine:
 
 
 def init_engine(database_url: str) -> None:
-    global _engine, _sessionmaker   # pylint: disable=global-statement
+    global _engine, _sessionmaker  # pylint: disable=global-statement
     _engine = _create_engine(database_url)
     _sessionmaker = async_sessionmaker(bind=_engine, autoflush=False, autocommit=False)
 
@@ -61,8 +62,21 @@ async def get_session() -> AsyncIterator[AsyncSession]:
         await session.close()
 
 
+@asynccontextmanager
+async def get_db_session():
+    session_generator = get_session()
+    session = await anext(session_generator)
+    try:
+        yield session
+    finally:
+        try:
+            await anext(session_generator)
+        except StopAsyncIteration:
+            pass
+
+
 def reset_engine() -> None:
-    global _engine, _sessionmaker   # pylint: disable=global-statement
+    global _engine, _sessionmaker  # pylint: disable=global-statement
     if _engine is not None:
         _engine.sync_engine.dispose()
     _engine = None

@@ -1,7 +1,7 @@
 from uuid import UUID
 
 from budget_api.tables import AccountsTable
-from tests.conftest import get_test_db_session
+from budget_api.db import get_db_session
 
 
 async def create_budget(async_client) -> str:
@@ -12,7 +12,7 @@ async def create_budget(async_client) -> str:
     return response.json()["id"]
 
 
-async def test_create_account(app, async_client, seeded_currencies) -> None:
+async def test_create_account(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -36,7 +36,7 @@ async def test_create_account(app, async_client, seeded_currencies) -> None:
     assert "created_at" in payload
 
 
-async def test_account_persists_in_db(app, async_client, seeded_currencies) -> None:
+async def test_account_persists_in_db(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -52,7 +52,7 @@ async def test_account_persists_in_db(app, async_client, seeded_currencies) -> N
     assert response.status_code == 201
     account_id = UUID(response.json()["id"])
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         account = await session.get(AccountsTable, account_id)
 
         assert account is not None
@@ -62,7 +62,7 @@ async def test_account_persists_in_db(app, async_client, seeded_currencies) -> N
         assert account.is_closed is False
 
 
-async def test_list_accounts(app, async_client, seeded_currencies) -> None:
+async def test_list_accounts(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     first_response = await async_client.post(
@@ -100,7 +100,7 @@ async def test_list_accounts(app, async_client, seeded_currencies) -> None:
     assert "created_at" in payload[0]
 
 
-async def test_update_account(app, async_client, seeded_currencies) -> None:
+async def test_update_account(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -134,7 +134,7 @@ async def test_update_account(app, async_client, seeded_currencies) -> None:
     assert payload["currency_code"] == "EUR"
     assert payload["is_closed"] is True
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is not None
@@ -144,7 +144,7 @@ async def test_update_account(app, async_client, seeded_currencies) -> None:
         assert account.is_closed is True
 
 
-async def test_delete_account(app, async_client, seeded_currencies) -> None:
+async def test_delete_account(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -164,13 +164,13 @@ async def test_delete_account(app, async_client, seeded_currencies) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         account = await session.get(AccountsTable, UUID(account_id))
 
         assert account is None
 
 
-async def test_list_accounts_empty(app, async_client, seeded_currencies) -> None:
+async def test_list_accounts_empty(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.get(f"/budgets/{budget_id}/accounts")
@@ -179,9 +179,7 @@ async def test_list_accounts_empty(app, async_client, seeded_currencies) -> None
     assert response.json() == []
 
 
-async def test_list_accounts_ordered_by_created_at(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_accounts_ordered_by_created_at(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     first_response = await async_client.post(
@@ -213,9 +211,7 @@ async def test_list_accounts_ordered_by_created_at(
     assert [item["name"] for item in payload] == ["Alpha", "Beta"]
 
 
-async def test_create_account_rejects_unknown_currency(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_rejects_unknown_currency(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -232,9 +228,7 @@ async def test_create_account_rejects_unknown_currency(
     assert response.json()["detail"] == "Unknown currency code."
 
 
-async def test_create_account_rejects_unknown_budget(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_rejects_unknown_budget(app, async_client) -> None:
     response = await async_client.post(
         "/accounts",
         json={
@@ -249,9 +243,7 @@ async def test_create_account_rejects_unknown_budget(
     assert response.json()["detail"] == "Budget not found."
 
 
-async def test_create_account_validates_payload(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_validates_payload(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -267,9 +259,7 @@ async def test_create_account_validates_payload(
     assert response.status_code == 422
 
 
-async def test_create_account_normalizes_currency_code(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_normalizes_currency_code(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -286,9 +276,7 @@ async def test_create_account_normalizes_currency_code(
     assert response.json()["currency_code"] == "USD"
 
 
-async def test_create_account_rejects_duplicate_name(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_rejects_duplicate_name(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -317,9 +305,7 @@ async def test_create_account_rejects_duplicate_name(
     assert duplicate_response.json()["detail"] == "Account name already exists."
 
 
-async def test_create_account_rejects_invalid_type(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_account_rejects_invalid_type(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -335,9 +321,7 @@ async def test_create_account_rejects_invalid_type(
     assert response.status_code == 422
 
 
-async def test_update_account_rejects_unknown_currency(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_rejects_unknown_currency(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -359,9 +343,7 @@ async def test_update_account_rejects_unknown_currency(
     assert update_response.json()["detail"] == "Unknown currency code."
 
 
-async def test_update_account_requires_fields(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_requires_fields(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -381,9 +363,7 @@ async def test_update_account_requires_fields(
     assert update_response.json()["detail"] == "No fields to update."
 
 
-async def test_update_account_validates_payload(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_validates_payload(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -405,7 +385,7 @@ async def test_update_account_validates_payload(
     assert update_response.status_code == 422
 
 
-async def test_update_account_not_found(app, async_client, seeded_currencies) -> None:
+async def test_update_account_not_found(app, async_client) -> None:
     update_response = await async_client.patch(
         "/accounts/00000000-0000-0000-0000-000000000000",
         json={"name": "Updated"},
@@ -415,7 +395,7 @@ async def test_update_account_not_found(app, async_client, seeded_currencies) ->
     assert update_response.json()["detail"] == "Account not found."
 
 
-async def test_update_account_invalid_id(app, async_client, seeded_currencies) -> None:
+async def test_update_account_invalid_id(app, async_client) -> None:
     update_response = await async_client.patch(
         "/accounts/not-a-uuid", json={"name": "Updated"}
     )
@@ -423,9 +403,7 @@ async def test_update_account_invalid_id(app, async_client, seeded_currencies) -
     assert update_response.status_code == 422
 
 
-async def test_update_account_normalizes_currency_code(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_normalizes_currency_code(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -447,9 +425,7 @@ async def test_update_account_normalizes_currency_code(
     assert update_response.json()["currency_code"] == "EUR"
 
 
-async def test_update_account_rejects_duplicate_name(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_account_rejects_duplicate_name(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     first_response = await async_client.post(
@@ -484,7 +460,7 @@ async def test_update_account_rejects_duplicate_name(
     assert update_response.json()["detail"] == "Account name already exists."
 
 
-async def test_delete_account_not_found(app, async_client, seeded_currencies) -> None:
+async def test_delete_account_not_found(app, async_client) -> None:
     delete_response = await async_client.delete(
         "/accounts/00000000-0000-0000-0000-000000000000"
     )
@@ -493,15 +469,13 @@ async def test_delete_account_not_found(app, async_client, seeded_currencies) ->
     assert delete_response.json()["detail"] == "Account not found."
 
 
-async def test_delete_account_invalid_id(app, async_client, seeded_currencies) -> None:
+async def test_delete_account_invalid_id(app, async_client) -> None:
     delete_response = await async_client.delete("/accounts/not-a-uuid")
 
     assert delete_response.status_code == 422
 
 
-async def test_delete_account_has_empty_body(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_delete_account_has_empty_body(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 
     response = await async_client.post(
@@ -521,9 +495,7 @@ async def test_delete_account_has_empty_body(
     assert delete_response.content == b""
 
 
-async def test_list_accounts_scoped_to_budget(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_accounts_scoped_to_budget(app, async_client) -> None:
     first_budget_id = await create_budget(async_client)
     second_budget_id = await create_budget(async_client)
 
@@ -558,9 +530,7 @@ async def test_list_accounts_scoped_to_budget(
     assert payload[0]["name"] == "Checking"
 
 
-async def test_list_accounts_rejects_unknown_budget(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_accounts_rejects_unknown_budget(app, async_client) -> None:
     response = await async_client.get(
         "/budgets/00000000-0000-0000-0000-000000000000/accounts"
     )
@@ -569,9 +539,7 @@ async def test_list_accounts_rejects_unknown_budget(
     assert response.json()["detail"] == "Budget not found."
 
 
-async def test_list_accounts_invalid_budget_id(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_accounts_invalid_budget_id(app, async_client) -> None:
     response = await async_client.get("/budgets/not-a-uuid/accounts")
 
     assert response.status_code == 422

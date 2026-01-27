@@ -76,18 +76,14 @@ async def add_budget_member(
     )
 
 
-@router.delete(
-    "/{budget_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT
-)
+@router.delete("/{budget_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_budget_member(
     budget_id: uuid.UUID,
     user_id: uuid.UUID,
     budgets_service: BudgetsService = Depends(),
     _current_user: User = Depends(get_or_create_current_user),
 ) -> None:
-    await budgets_service.remove_budget_member(
-        budget_id, user_id, _current_user.id
-    )
+    await budgets_service.remove_budget_member(budget_id, user_id, _current_user.id)
 
 
 @router.get("/{budget_id}/members", response_model=list[BudgetMemberResponse])
@@ -96,6 +92,4 @@ async def list_budget_members(
     budgets_service: BudgetsService = Depends(),
     current_user: User = Depends(get_or_create_current_user),
 ) -> list[BudgetMember]:
-    return await budgets_service.list_budget_members(
-        budget_id, current_user.id
-    )
+    return await budgets_service.list_budget_members(budget_id, current_user.id)

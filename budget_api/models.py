@@ -28,7 +28,7 @@ class CurrencyResponse(BaseModel):
     code: str
     name: str
     symbol: str | None
-    minor_unit: int
+    minor_unit: int | None
 
 
 @dataclass(frozen=True, slots=True)

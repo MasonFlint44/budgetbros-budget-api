@@ -34,7 +34,7 @@ class CurrenciesTable(Base):
     code: Mapped[str] = mapped_column(String(3), primary_key=True)
     name: Mapped[str] = mapped_column(String(60), nullable=False)
     symbol: Mapped[Optional[str]] = mapped_column(String(10), nullable=True)
-    minor_unit: Mapped[int] = mapped_column(Integer, nullable=False, default=2)
+    minor_unit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=2)
 
     budgets: Mapped[List["BudgetsTable"]] = relationship(back_populates="base_currency")
     accounts: Mapped[List["AccountsTable"]] = relationship(back_populates="currency")

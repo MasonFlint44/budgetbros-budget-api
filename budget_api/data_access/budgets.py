@@ -77,9 +77,7 @@ class BudgetsDataAccess:
         )
         return result.scalar_one_or_none() is not None
 
-    async def add_budget_member(
-        self, budget_id: uuid.UUID, user_id: uuid.UUID
-    ) -> None:
+    async def add_budget_member(self, budget_id: uuid.UUID, user_id: uuid.UUID) -> None:
         member = BudgetMembersTable(budget_id=budget_id, user_id=user_id)
         self._session.add(member)
         await self._session.flush()

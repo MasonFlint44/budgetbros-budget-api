@@ -5,10 +5,10 @@ from datetime import datetime, timezone
 from sqlalchemy import select
 
 from budget_api.tables import BudgetMembersTable, BudgetsTable, UsersTable
-from tests.conftest import get_test_db_session
+from budget_api.db import get_db_session
 
 
-async def test_create_budget(app, async_client, seeded_currencies) -> None:
+async def test_create_budget(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -21,7 +21,7 @@ async def test_create_budget(app, async_client, seeded_currencies) -> None:
     assert "created_at" in payload
 
 
-async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> None:
+async def test_budget_persists_in_db(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -29,7 +29,7 @@ async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> No
     assert response.status_code == 201
     budget_id = UUID(response.json()["id"])
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         budget = await session.get(BudgetsTable, budget_id)
 
         assert budget is not None
@@ -37,7 +37,7 @@ async def test_budget_persists_in_db(app, async_client, seeded_currencies) -> No
         assert budget.base_currency_code == "USD"
 
 
-async def test_list_budgets(app, async_client, seeded_currencies) -> None:
+async def test_list_budgets(app, async_client) -> None:
     before_response = await async_client.get("/budgets")
     assert before_response.status_code == 200
     before_ids = {budget["id"] for budget in before_response.json()}
@@ -66,7 +66,7 @@ async def test_list_budgets(app, async_client, seeded_currencies) -> None:
     assert "created_at" in new_by_name["Household"]
 
 
-async def test_update_budget(app, async_client, seeded_currencies) -> None:
+async def test_update_budget(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -85,7 +85,7 @@ async def test_update_budget(app, async_client, seeded_currencies) -> None:
     assert payload["name"] == "Updated"
     assert payload["base_currency_code"] == "EUR"
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is not None
@@ -93,7 +93,7 @@ async def test_update_budget(app, async_client, seeded_currencies) -> None:
         assert budget.base_currency_code == "EUR"
 
 
-async def test_delete_budget(app, async_client, seeded_currencies) -> None:
+async def test_delete_budget(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -105,13 +105,13 @@ async def test_delete_budget(app, async_client, seeded_currencies) -> None:
 
     assert delete_response.status_code == 204
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         budget = await session.get(BudgetsTable, UUID(budget_id))
 
         assert budget is None
 
 
-async def test_list_budgets_empty(app, async_client, seeded_currencies) -> None:
+async def test_list_budgets_empty(app, async_client) -> None:
     response = await async_client.get("/budgets")
 
     assert response.status_code == 200
@@ -119,9 +119,7 @@ async def test_list_budgets_empty(app, async_client, seeded_currencies) -> None:
     assert isinstance(payload, list)
 
 
-async def test_list_budgets_ordered_by_created_at(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_budgets_ordered_by_created_at(app, async_client) -> None:
     before_response = await async_client.get("/budgets")
     assert before_response.status_code == 200
     before_ids = {budget["id"] for budget in before_response.json()}
@@ -145,9 +143,7 @@ async def test_list_budgets_ordered_by_created_at(
     assert new_names == ["Alpha", "Beta"]
 
 
-async def test_create_budget_rejects_unknown_currency(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_budget_rejects_unknown_currency(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "ZZZ"}
     )
@@ -156,9 +152,7 @@ async def test_create_budget_rejects_unknown_currency(
     assert response.json()["detail"] == "Unknown base currency code."
 
 
-async def test_create_budget_validates_payload(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_budget_validates_payload(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "", "base_currency_code": "US"}
     )
@@ -166,9 +160,7 @@ async def test_create_budget_validates_payload(
     assert response.status_code == 422
 
 
-async def test_create_budget_normalizes_currency_code(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_create_budget_normalizes_currency_code(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "usd"}
     )
@@ -177,9 +169,7 @@ async def test_create_budget_normalizes_currency_code(
     assert response.json()["base_currency_code"] == "USD"
 
 
-async def test_update_budget_rejects_unknown_currency(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_budget_rejects_unknown_currency(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -193,9 +183,7 @@ async def test_update_budget_rejects_unknown_currency(
     assert update_response.json()["detail"] == "Unknown base currency code."
 
 
-async def test_update_budget_requires_fields(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_budget_requires_fields(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -207,9 +195,7 @@ async def test_update_budget_requires_fields(
     assert update_response.json()["detail"] == "No fields to update."
 
 
-async def test_update_budget_validates_payload(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_budget_validates_payload(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -222,7 +208,7 @@ async def test_update_budget_validates_payload(
     assert update_response.status_code == 422
 
 
-async def test_update_budget_not_found(app, async_client, seeded_currencies) -> None:
+async def test_update_budget_not_found(app, async_client) -> None:
     update_response = await async_client.patch(
         "/budgets/00000000-0000-0000-0000-000000000000",
         json={"name": "Updated"},
@@ -232,7 +218,7 @@ async def test_update_budget_not_found(app, async_client, seeded_currencies) -> 
     assert update_response.json()["detail"] == "Budget not found."
 
 
-async def test_update_budget_invalid_id(app, async_client, seeded_currencies) -> None:
+async def test_update_budget_invalid_id(app, async_client) -> None:
     update_response = await async_client.patch(
         "/budgets/not-a-uuid", json={"name": "Updated"}
     )
@@ -240,9 +226,7 @@ async def test_update_budget_invalid_id(app, async_client, seeded_currencies) ->
     assert update_response.status_code == 422
 
 
-async def test_update_budget_normalizes_currency_code(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_budget_normalizes_currency_code(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -256,7 +240,7 @@ async def test_update_budget_normalizes_currency_code(
     assert update_response.json()["base_currency_code"] == "EUR"
 
 
-async def test_delete_budget_not_found(app, async_client, seeded_currencies) -> None:
+async def test_delete_budget_not_found(app, async_client) -> None:
     delete_response = await async_client.delete(
         "/budgets/00000000-0000-0000-0000-000000000000"
     )
@@ -265,15 +249,13 @@ async def test_delete_budget_not_found(app, async_client, seeded_currencies) -> 
     assert delete_response.json()["detail"] == "Budget not found."
 
 
-async def test_delete_budget_invalid_id(app, async_client, seeded_currencies) -> None:
+async def test_delete_budget_invalid_id(app, async_client) -> None:
     delete_response = await async_client.delete("/budgets/not-a-uuid")
 
     assert delete_response.status_code == 422
 
 
-async def test_delete_budget_has_empty_body(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_delete_budget_has_empty_body(app, async_client) -> None:
     response = await async_client.post(
         "/budgets", json={"name": "Household", "base_currency_code": "USD"}
     )
@@ -285,9 +267,7 @@ async def test_delete_budget_has_empty_body(
     assert delete_response.content == b""
 
 
-async def test_list_budgets_scoped_to_member(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_list_budgets_scoped_to_member(app, async_client) -> None:
     await async_client.get("/budgets")
 
     response = await async_client.post(
@@ -300,7 +280,7 @@ async def test_list_budgets_scoped_to_member(
     other_user_id = UUID("00000000-0000-0000-0000-000000000001")
     other_budget_id = UUID("00000000-0000-0000-0000-000000000002")
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         session.add(
             UsersTable(
                 id=other_user_id,
@@ -335,16 +315,14 @@ async def test_list_budgets_scoped_to_member(
     assert all(item["id"] != str(other_budget_id) for item in payload)
 
 
-async def test_update_budget_requires_membership(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_update_budget_requires_membership(app, async_client) -> None:
     await async_client.get("/budgets")
 
     now = datetime.now(timezone.utc)
     other_user_id = UUID("00000000-0000-0000-0000-000000000003")
     other_budget_id = UUID("00000000-0000-0000-0000-000000000004")
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         session.add(
             UsersTable(
                 id=other_user_id,
@@ -380,21 +358,17 @@ async def test_update_budget_requires_membership(
     assert update_response.json()["detail"] == "Not authorized to update budget."
 
 
-async def test_delete_budget_requires_owner(
-    app, async_client, seeded_currencies
-) -> None:
+async def test_delete_budget_requires_owner(app, async_client) -> None:
     await async_client.get("/budgets")
 
     now = datetime.now(timezone.utc)
     owner_id = UUID("00000000-0000-0000-0000-000000000005")
     shared_budget_id = UUID("00000000-0000-0000-0000-000000000006")
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         current_user = (
             await session.execute(
-                select(UsersTable).where(
-                    UsersTable.email == "masonflint44@gmail.com"
-                )
+                select(UsersTable).where(UsersTable.email == "masonflint44@gmail.com")
             )
         ).scalar_one()
         session.add(
@@ -434,6 +408,6 @@ async def test_delete_budget_requires_owner(
     assert delete_response.status_code == 403
     assert delete_response.json()["detail"] == "Not authorized to delete budget."
 
-    async with get_test_db_session() as session:
+    async with get_db_session() as session:
         budget = await session.get(BudgetsTable, shared_budget_id)
         assert budget is not None

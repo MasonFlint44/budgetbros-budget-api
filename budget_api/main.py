@@ -5,11 +5,16 @@ from fastapi import FastAPI, Depends
 from budget_api import db
 from budget_api.auth import verifier, get_or_create_current_user
 from budget_api.routers import accounts, budgets, currencies
+from budget_api.data_access import CurrenciesDataAccess
+from budget_api.data import CURRENCIES
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await db.init_db()
+    async with db.get_db_session() as session:
+        currencies_store = CurrenciesDataAccess(session)
+        await currencies_store.seed_currencies(CURRENCIES)
     await verifier.init_keys()
     yield
     await verifier.close()

@@ -15,6 +15,7 @@
         "redhat.vscode-yaml",
         "DavidAnson.vscode-markdownlint",
         "donjayamanne.githistory",
-        "mutantdino.resourcemonitor"
+        "mutantdino.resourcemonitor",
+        "openai.chatgpt"
     ]
 }

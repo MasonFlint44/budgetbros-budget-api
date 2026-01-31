@@ -32,6 +32,7 @@
 - **Uniqueness**: budgets, accounts, categories, payees enforce name uniqueness per budget; handle conflicts with 409s.
 - **Ordering**: list endpoints generally order by `created_at` (see data_access implementations).
 - **Transactions**: amounts are signed minor units (see README note).
+- **Diagrams**: when `budget_api/tables.py` changes, update `diagrams/tables.mmd` to keep the Mermaid schema diagram in sync.
 
 ## Adding or changing endpoints
 - Add routes in `budget_api/routers/`.

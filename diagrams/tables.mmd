@@ -1,0 +1,112 @@
+erDiagram
+  CURRENCIES {
+    string code PK
+    string name
+    string symbol
+    int minor_unit
+  }
+
+  USERS {
+    uuid id PK
+    string email
+    datetime created_at
+    datetime last_seen_at
+  }
+
+  BUDGETS {
+    uuid id PK
+    string name
+    uuid owner_user_id FK
+    string base_currency_code FK
+    datetime created_at
+  }
+
+  BUDGET_MEMBERS {
+    uuid id PK
+    uuid budget_id FK
+    uuid user_id FK
+    datetime created_at
+  }
+
+  ACCOUNTS {
+    uuid id PK
+    uuid budget_id FK
+    string name
+    string type
+    string currency_code FK
+    bool is_closed
+    datetime created_at
+  }
+
+  CATEGORIES {
+    uuid id PK
+    uuid budget_id FK
+    string name
+    string kind
+    uuid parent_id FK
+    bool is_archived
+    int sort_order
+  }
+
+  PAYEES {
+    uuid id PK
+    uuid budget_id FK
+    string name
+    bool is_archived
+  }
+
+  TRANSACTIONS {
+    uuid id PK
+    uuid budget_id FK
+    datetime posted_at
+    string status
+    string notes
+    string import_id
+    datetime created_at
+  }
+
+  TRANSACTION_LINES {
+    uuid id PK
+    uuid transaction_id FK
+    uuid account_id FK
+    uuid category_id FK
+    uuid payee_id FK
+    int amount_minor
+    string memo
+  }
+
+  TAGS {
+    uuid id PK
+    uuid budget_id FK
+    string name
+  }
+
+  TRANSACTION_LINE_TAGS {
+    uuid line_id PK, FK
+    uuid tag_id PK, FK
+    datetime created_at
+  }
+
+  CURRENCIES ||--o{ BUDGETS : base_currency_code
+  CURRENCIES ||--o{ ACCOUNTS : currency_code
+
+  USERS ||--o{ BUDGET_MEMBERS : user_id
+  BUDGETS ||--o{ BUDGET_MEMBERS : budget_id
+
+  USERS ||--o{ BUDGETS : owner_user_id
+
+  BUDGETS ||--o{ ACCOUNTS : budget_id
+  BUDGETS ||--o{ CATEGORIES : budget_id
+  BUDGETS ||--o{ PAYEES : budget_id
+  BUDGETS ||--o{ TRANSACTIONS : budget_id
+  BUDGETS ||--o{ TAGS : budget_id
+
+  CATEGORIES ||--o{ CATEGORIES : parent_id
+
+  TRANSACTIONS ||--o{ TRANSACTION_LINES : transaction_id
+  ACCOUNTS ||--o{ TRANSACTION_LINES : account_id
+  CATEGORIES ||--o{ TRANSACTION_LINES : category_id
+  PAYEES ||--o{ TRANSACTION_LINES : payee_id
+
+  TRANSACTION_LINES ||--o{ TRANSACTION_LINE_TAGS : line_id
+  TAGS ||--o{ TRANSACTION_LINE_TAGS : tag_id

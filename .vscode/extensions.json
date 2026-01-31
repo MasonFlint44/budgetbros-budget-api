@@ -16,6 +16,7 @@
         "DavidAnson.vscode-markdownlint",
         "donjayamanne.githistory",
         "mutantdino.resourcemonitor",
-        "openai.chatgpt"
+        "openai.chatgpt",
+        "vstirbu.vscode-mermaid-preview"
     ]
 }

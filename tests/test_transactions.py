@@ -1,0 +1,208 @@
+from uuid import UUID, uuid4
+
+from sqlalchemy import select
+
+from budget_api.db import get_session_scope
+from budget_api.tables import (
+    CategoriesTable,
+    PayeesTable,
+    TransactionLinesTable,
+    TransactionsTable,
+)
+
+
+async def create_budget(async_client, *, base_currency_code: str = "USD") -> str:
+    response = await async_client.post(
+        "/budgets",
+        json={
+            "name": f"Budget-{uuid4()}",
+            "base_currency_code": base_currency_code,
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+async def create_account(async_client, budget_id: str) -> str:
+    response = await async_client.post(
+        f"/budgets/{budget_id}/accounts",
+        json={
+            "name": f"Checking-{uuid4()}",
+            "type": "checking",
+            "currency_code": "USD",
+        },
+    )
+    assert response.status_code == 201
+    return response.json()["id"]
+
+
+async def create_category(budget_id: UUID) -> UUID:
+    category_id = uuid4()
+    async with get_session_scope() as session:
+        session.add(
+            CategoriesTable(
+                id=category_id,
+                budget_id=budget_id,
+                name=f"Category-{category_id}",
+                kind="expense",
+                parent_id=None,
+                is_archived=False,
+                sort_order=0,
+            )
+        )
+        await session.flush()
+    return category_id
+
+
+async def create_payee(budget_id: UUID) -> UUID:
+    payee_id = uuid4()
+    async with get_session_scope() as session:
+        session.add(
+            PayeesTable(
+                id=payee_id,
+                budget_id=budget_id,
+                name=f"Payee-{payee_id}",
+                is_archived=False,
+            )
+        )
+        await session.flush()
+    return payee_id
+
+
+async def test_create_transaction(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    category_id = await create_category(UUID(budget_id))
+    payee_id = await create_payee(UUID(budget_id))
+
+    import_id = f"import-{uuid4()}"
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "posted_at": "2025-01-02T03:04:05",
+            "status": "POSTED",
+            "notes": "Dinner",
+            "import_id": import_id,
+            "line": {
+                "account_id": account_id,
+                "category_id": str(category_id),
+                "payee_id": str(payee_id),
+                "amount_minor": -1234,
+                "memo": "Tacos",
+            },
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["budget_id"] == budget_id
+    assert payload["status"] == "posted"
+    assert payload["notes"] == "Dinner"
+    assert payload["import_id"] == import_id
+    assert payload["posted_at"].startswith("2025-01-02T03:04:05")
+    assert payload["posted_at"].endswith(("Z", "+00:00"))
+
+    assert payload["lines"]
+    assert len(payload["lines"]) == 1
+    line = payload["lines"][0]
+    assert line["account_id"] == account_id
+    assert line["category_id"] == str(category_id)
+    assert line["payee_id"] == str(payee_id)
+    assert line["amount_minor"] == -1234
+    assert line["memo"] == "Tacos"
+    assert line["tag_ids"] == []
+
+    transaction_id = UUID(payload["id"])
+    async with get_session_scope() as session:
+        transaction = await session.get(TransactionsTable, transaction_id)
+        assert transaction is not None
+        assert transaction.budget_id == UUID(budget_id)
+        assert transaction.status == "posted"
+
+        result = await session.execute(
+            select(TransactionLinesTable).where(
+                TransactionLinesTable.transaction_id == transaction_id
+            )
+        )
+        lines = result.scalars().all()
+        assert len(lines) == 1
+        line_row = lines[0]
+        assert line_row.account_id == UUID(account_id)
+        assert line_row.category_id == category_id
+        assert line_row.payee_id == payee_id
+        assert line_row.amount_minor == -1234
+        assert line_row.memo == "Tacos"
+
+
+async def test_create_transaction_rejects_unknown_account(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "line": {
+                "account_id": str(uuid4()),
+                "amount_minor": -500,
+            }
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Account not found."
+
+
+async def test_create_transaction_rejects_unknown_category(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "line": {
+                "account_id": account_id,
+                "category_id": str(uuid4()),
+                "amount_minor": -500,
+            }
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Category not found."
+
+
+async def test_create_transaction_rejects_unknown_payee(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "line": {
+                "account_id": account_id,
+                "payee_id": str(uuid4()),
+                "amount_minor": -500,
+            }
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Payee not found."
+
+
+async def test_create_transaction_rejects_zero_amount(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "line": {
+                "account_id": account_id,
+                "amount_minor": 0,
+            }
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Amount must be non-zero."

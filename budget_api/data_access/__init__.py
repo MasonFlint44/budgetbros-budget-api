@@ -1,3 +1,4 @@
 from budget_api.data_access.accounts import AccountsDataAccess
 from budget_api.data_access.budgets import BudgetsDataAccess
 from budget_api.data_access.currencies import CurrenciesDataAccess
+from budget_api.data_access.transactions import TransactionsDataAccess

@@ -15,5 +15,14 @@ from .budgets import (
     BudgetUpdate,
 )
 from .currencies import Currency, CurrencyResponse
+from .transactions import (
+    Transaction,
+    TransactionCreate,
+    TransactionLine,
+    TransactionLineCreate,
+    TransactionLineDraft,
+    TransactionLineResponse,
+    TransactionResponse,
+    TransactionStatus,
+)
 from .users import User
-

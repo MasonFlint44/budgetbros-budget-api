@@ -208,6 +208,20 @@ async def test_update_budget_validates_payload(app, async_client) -> None:
     assert update_response.status_code == 422
 
 
+async def test_update_budget_rejects_null_fields(app, async_client) -> None:
+    response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+    budget_id = response.json()["id"]
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}",
+        json={"name": None},
+    )
+
+    assert update_response.status_code == 422
+
+
 async def test_update_budget_not_found(app, async_client) -> None:
     update_response = await async_client.patch(
         "/budgets/00000000-0000-0000-0000-000000000000",

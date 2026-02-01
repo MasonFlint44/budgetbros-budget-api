@@ -68,7 +68,13 @@ async def get_session_scope():
     session = await anext(session_generator)
     try:
         yield session
-    finally:
+    except Exception as exc:
+        try:
+            await session_generator.athrow(exc)
+        except StopAsyncIteration:
+            pass
+        raise
+    else:
         try:
             await anext(session_generator)
         except StopAsyncIteration:

@@ -420,6 +420,27 @@ async def test_update_account_validates_payload(app, async_client) -> None:
     assert update_response.status_code == 422
 
 
+async def test_update_account_rejects_null_fields(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/accounts",
+        json={
+            "name": "Checking",
+            "type": "checking",
+            "currency_code": "USD",
+        },
+    )
+    account_id = response.json()["id"]
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}/accounts/{account_id}",
+        json={"name": None},
+    )
+
+    assert update_response.status_code == 422
+
+
 async def test_update_account_not_found(app, async_client) -> None:
     budget_id = await create_budget(async_client)
 

@@ -117,6 +117,45 @@ class TransactionsDataAccess:
         )
         return set(result.scalars().all())
 
+    async def _list_lines_with_tags(
+        self, transaction_ids: Sequence[uuid.UUID]
+    ) -> dict[uuid.UUID, list[TransactionLine]]:
+        if not transaction_ids:
+            return {}
+
+        lines_result = await self._session.execute(
+            select(TransactionLinesTable)
+            .where(TransactionLinesTable.transaction_id.in_(transaction_ids))
+            .order_by(TransactionLinesTable.transaction_id, TransactionLinesTable.id)
+        )
+        line_rows = list(lines_result.scalars())
+
+        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
+            line.id: [] for line in line_rows
+        }
+        line_ids = [line.id for line in line_rows]
+        if line_ids:
+            tag_rows = await self._session.execute(
+                select(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
+                .where(TransactionLineTagsTable.line_id.in_(line_ids))
+                .order_by(
+                    TransactionLineTagsTable.line_id,
+                    TransactionLineTagsTable.tag_id,
+                )
+            )
+            for line_id, tag_id in tag_rows.all():
+                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
+
+        lines_by_transaction: dict[uuid.UUID, list[TransactionLine]] = {
+            transaction_id: [] for transaction_id in transaction_ids
+        }
+        for line in line_rows:
+            lines_by_transaction.setdefault(line.transaction_id, []).append(
+                _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
+            )
+
+        return lines_by_transaction
+
     async def list_transactions(
         self, budget_id: uuid.UUID, *, include_lines: bool = True
     ) -> list[Transaction]:
@@ -134,35 +173,7 @@ class TransactionsDataAccess:
             return [_to_transaction(transaction) for transaction in transactions]
 
         transaction_ids = [transaction.id for transaction in transactions]
-        lines_result = await self._session.execute(
-            select(TransactionLinesTable)
-            .where(TransactionLinesTable.transaction_id.in_(transaction_ids))
-            .order_by(TransactionLinesTable.transaction_id, TransactionLinesTable.id)
-        )
-        line_rows = list(lines_result.scalars())
-
-        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
-            line.id: [] for line in line_rows
-        }
-        line_ids = [line.id for line in line_rows]
-        if line_ids:
-            tag_rows = await self._session.execute(
-                select(
-                    TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id
-                )
-                .where(TransactionLineTagsTable.line_id.in_(line_ids))
-                .order_by(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
-            )
-            for line_id, tag_id in tag_rows.all():
-                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
-
-        lines_by_transaction: dict[uuid.UUID, list[TransactionLine]] = {
-            transaction_id: [] for transaction_id in transaction_ids
-        }
-        for line in line_rows:
-            lines_by_transaction.setdefault(line.transaction_id, []).append(
-                _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
-            )
+        lines_by_transaction = await self._list_lines_with_tags(transaction_ids)
 
         return [
             _to_transaction(
@@ -180,31 +191,10 @@ class TransactionsDataAccess:
         if not include_lines:
             return _to_transaction(transaction)
 
-        lines_result = await self._session.execute(
-            select(TransactionLinesTable)
-            .where(TransactionLinesTable.transaction_id == transaction_id)
-            .order_by(TransactionLinesTable.id)
+        lines_by_transaction = await self._list_lines_with_tags([transaction_id])
+        return _to_transaction(
+            transaction, lines=lines_by_transaction.get(transaction_id, [])
         )
-        line_rows = list(lines_result.scalars())
-
-        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
-            line.id: [] for line in line_rows
-        }
-        line_ids = [line.id for line in line_rows]
-        if line_ids:
-            tag_rows = await self._session.execute(
-                select(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
-                .where(TransactionLineTagsTable.line_id.in_(line_ids))
-                .order_by(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
-            )
-            for line_id, tag_id in tag_rows.all():
-                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
-
-        lines = [
-            _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
-            for line in line_rows
-        ]
-        return _to_transaction(transaction, lines=lines)
 
 
 def _to_transaction(

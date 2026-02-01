@@ -1,7 +1,9 @@
 import uuid
 
 from fastapi import APIRouter, Depends, HTTPException, status
+
 from budget_api.auth import get_or_create_current_user
+from budget_api.dependencies import require_budget_member, require_budget_owner
 from budget_api.models import (
     Budget,
     BudgetCreate,
@@ -12,6 +14,7 @@ from budget_api.models import (
     BudgetUpdate,
     User,
 )
+from budget_api.routers.utils import reject_null_updates
 from budget_api.services import BudgetsService
 
 router = APIRouter(prefix="/budgets")
@@ -40,56 +43,56 @@ async def list_budgets(
 
 @router.patch("/{budget_id}", response_model=BudgetResponse)
 async def update_budget(
-    budget_id: uuid.UUID,
     payload: BudgetUpdate,
+    budget: Budget = Depends(require_budget_member("Not authorized to update budget.")),
     budgets_service: BudgetsService = Depends(),
-    current_user: User = Depends(get_or_create_current_user),
 ) -> Budget:
     updates = payload.model_dump(exclude_unset=True)
+    reject_null_updates(updates)
     if not updates:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="No fields to update.",
         )
 
-    return await budgets_service.update_budget(budget_id, updates, current_user.id)
+    return await budgets_service.update_budget(budget, updates)
 
 
 @router.delete("/{budget_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_budget(
-    budget_id: uuid.UUID,
+    budget: Budget = Depends(require_budget_owner("Not authorized to delete budget.")),
     budgets_service: BudgetsService = Depends(),
-    current_user: User = Depends(get_or_create_current_user),
 ) -> None:
-    await budgets_service.delete_budget(budget_id, current_user.id)
+    await budgets_service.delete_budget(budget)
 
 
 @router.post("/{budget_id}/members", status_code=status.HTTP_204_NO_CONTENT)
 async def add_budget_member(
-    budget_id: uuid.UUID,
     payload: BudgetMemberCreate,
+    budget: Budget = Depends(
+        require_budget_owner("Not authorized to manage budget members.")
+    ),
     budgets_service: BudgetsService = Depends(),
-    _current_user: User = Depends(get_or_create_current_user),
 ) -> None:
-    await budgets_service.add_budget_member(
-        budget_id, payload.user_id, _current_user.id
-    )
+    await budgets_service.add_budget_member(budget, payload.user_id)
 
 
 @router.delete("/{budget_id}/members/{user_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def remove_budget_member(
-    budget_id: uuid.UUID,
     user_id: uuid.UUID,
+    budget: Budget = Depends(
+        require_budget_owner("Not authorized to manage budget members.")
+    ),
     budgets_service: BudgetsService = Depends(),
-    _current_user: User = Depends(get_or_create_current_user),
 ) -> None:
-    await budgets_service.remove_budget_member(budget_id, user_id, _current_user.id)
+    await budgets_service.remove_budget_member(budget, user_id)
 
 
 @router.get("/{budget_id}/members", response_model=list[BudgetMemberResponse])
 async def list_budget_members(
-    budget_id: uuid.UUID,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to view budget members.")
+    ),
     budgets_service: BudgetsService = Depends(),
-    current_user: User = Depends(get_or_create_current_user),
 ) -> list[BudgetMember]:
-    return await budgets_service.list_budget_members(budget_id, current_user.id)
+    return await budgets_service.list_budget_members(budget)

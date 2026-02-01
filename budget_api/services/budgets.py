@@ -47,21 +47,8 @@ class BudgetsService:
         return await self._budgets_store.list_budgets_for_user(user_id)
 
     async def update_budget(
-        self, budget_id: uuid.UUID, updates: dict[str, object], user_id: uuid.UUID
+        self, budget: Budget, updates: dict[str, object]
     ) -> Budget:
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-        is_member = await self._budgets_store.budget_member_exists(budget_id, user_id)
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to update budget.",
-            )
-
         if "base_currency_code" in updates:
             currency_code = str(updates["base_currency_code"]).upper()
             currency = await self._currencies_store.get_currency(currency_code)
@@ -71,10 +58,10 @@ class BudgetsService:
                     detail="Unknown base currency code.",
                 )
             if currency_code != budget.base_currency_code:
-                await self._accounts_store.deactivate_accounts_by_budget(budget_id)
+                await self._accounts_store.deactivate_accounts_by_budget(budget.id)
             updates["base_currency_code"] = currency_code
 
-        updated_budget = await self._budgets_store.update_budget(budget_id, updates)
+        updated_budget = await self._budgets_store.update_budget(budget.id, updates)
         if updated_budget is None:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -82,20 +69,8 @@ class BudgetsService:
             )
         return updated_budget
 
-    async def delete_budget(self, budget_id: uuid.UUID, user_id: uuid.UUID) -> None:
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-        is_owner = await self._budgets_store.budget_owner_exists(budget_id, user_id)
-        if not is_owner:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to delete budget.",
-            )
-        deleted = await self._budgets_store.delete(budget_id)
+    async def delete_budget(self, budget: Budget) -> None:
+        deleted = await self._budgets_store.delete(budget.id)
         if not deleted:
             raise HTTPException(
                 status_code=status.HTTP_404_NOT_FOUND,
@@ -104,26 +79,9 @@ class BudgetsService:
 
     async def add_budget_member(
         self,
-        budget_id: uuid.UUID,
+        budget: Budget,
         member_user_id: uuid.UUID,
-        current_user_id: uuid.UUID,
     ) -> None:
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-
-        is_owner = await self._budgets_store.budget_owner_exists(
-            budget_id, current_user_id
-        )
-        if not is_owner:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to manage budget members.",
-            )
-
         user_exists = await self._budgets_store.user_exists(member_user_id)
         if not user_exists:
             raise HTTPException(
@@ -132,7 +90,7 @@ class BudgetsService:
             )
 
         member_exists = await self._budgets_store.budget_member_exists(
-            budget_id, member_user_id
+            budget.id, member_user_id
         )
         if member_exists:
             raise HTTPException(
@@ -141,33 +99,16 @@ class BudgetsService:
             )
 
         await self._budgets_store.add_budget_member(
-            budget_id=budget_id, user_id=member_user_id
+            budget_id=budget.id, user_id=member_user_id
         )
 
     async def remove_budget_member(
         self,
-        budget_id: uuid.UUID,
+        budget: Budget,
         member_user_id: uuid.UUID,
-        current_user_id: uuid.UUID,
     ) -> None:
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-
-        is_owner = await self._budgets_store.budget_owner_exists(
-            budget_id, current_user_id
-        )
-        if not is_owner:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to manage budget members.",
-            )
-
         deleted = await self._budgets_store.remove_budget_member(
-            budget_id, member_user_id
+            budget.id, member_user_id
         )
         if not deleted:
             raise HTTPException(
@@ -176,22 +117,6 @@ class BudgetsService:
             )
 
     async def list_budget_members(
-        self, budget_id: uuid.UUID, current_user_id: uuid.UUID
+        self, budget: Budget
     ) -> list[BudgetMember]:
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-
-        is_member = await self._budgets_store.budget_member_exists(
-            budget_id, current_user_id
-        )
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="Not authorized to view budget members.",
-            )
-
-        return await self._budgets_store.list_budget_members(budget_id)
+        return await self._budgets_store.list_budget_members(budget.id)

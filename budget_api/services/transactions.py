@@ -6,11 +6,7 @@ from typing import Iterable
 
 from fastapi import Depends, HTTPException, status
 
-from budget_api.data_access import (
-    AccountsDataAccess,
-    BudgetsDataAccess,
-    TransactionsDataAccess,
-)
+from budget_api.data_access import AccountsDataAccess, TransactionsDataAccess
 from budget_api.models import (
     Transaction,
     TransactionCreate,
@@ -57,41 +53,17 @@ class TransactionsService:
     def __init__(
         self,
         transactions_store: TransactionsDataAccess = Depends(),
-        budgets_store: BudgetsDataAccess = Depends(),
         accounts_store: AccountsDataAccess = Depends(),
     ) -> None:
         self._transactions_store = transactions_store
-        self._budgets_store = budgets_store
         self._accounts_store = accounts_store
-
-    async def _get_budget_for_member(
-        self, budget_id: uuid.UUID, user_id: uuid.UUID, *, detail: str
-    ):
-        budget = await self._budgets_store.get_budget(budget_id)
-        if budget is None:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Budget not found.",
-            )
-        is_member = await self._budgets_store.budget_member_exists(budget_id, user_id)
-        if not is_member:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=detail,
-            )
-        return budget
 
     async def create_transaction(
         self,
         *,
         budget_id: uuid.UUID,
         payload: TransactionCreate,
-        user_id: uuid.UUID,
     ) -> Transaction:
-        await self._get_budget_for_member(
-            budget_id, user_id, detail="Not authorized to create transactions."
-        )
-
         line = payload.line
         if line.amount_minor == 0:
             raise HTTPException(
@@ -176,13 +148,9 @@ class TransactionsService:
     async def list_transactions(
         self,
         budget_id: uuid.UUID,
-        user_id: uuid.UUID,
         *,
         include_lines: bool = True,
     ) -> list[Transaction]:
-        await self._get_budget_for_member(
-            budget_id, user_id, detail="Not authorized to view transactions."
-        )
         return await self._transactions_store.list_transactions(
             budget_id, include_lines=include_lines
         )
@@ -191,13 +159,9 @@ class TransactionsService:
         self,
         budget_id: uuid.UUID,
         transaction_id: uuid.UUID,
-        user_id: uuid.UUID,
         *,
         include_lines: bool = True,
     ) -> Transaction:
-        await self._get_budget_for_member(
-            budget_id, user_id, detail="Not authorized to view transactions."
-        )
         transaction = await self._transactions_store.get_transaction(
             transaction_id, include_lines=include_lines
         )

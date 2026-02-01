@@ -2,8 +2,8 @@ import uuid
 
 from fastapi import APIRouter, Depends, status
 
-from budget_api.auth import get_or_create_current_user
-from budget_api.models import Transaction, TransactionCreate, TransactionResponse, User
+from budget_api.dependencies import require_budget_member
+from budget_api.models import Budget, Transaction, TransactionCreate, TransactionResponse
 from budget_api.services import TransactionsService
 
 router = APIRouter(prefix="/budgets/{budget_id}/transactions")
@@ -11,41 +11,38 @@ router = APIRouter(prefix="/budgets/{budget_id}/transactions")
 
 @router.post("", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED)
 async def create_transaction(
-    budget_id: uuid.UUID,
     payload: TransactionCreate,
-    current_user: User = Depends(get_or_create_current_user),
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to create transactions.")
+    ),
     transactions_service: TransactionsService = Depends(),
 ) -> Transaction:
     return await transactions_service.create_transaction(
-        budget_id=budget_id,
+        budget_id=budget.id,
         payload=payload,
-        user_id=current_user.id,
     )
 
 
 @router.get("", response_model=list[TransactionResponse])
 async def list_transactions(
-    budget_id: uuid.UUID,
     include_lines: bool = True,
-    current_user: User = Depends(get_or_create_current_user),
+    budget: Budget = Depends(require_budget_member("Not authorized to view transactions.")),
     transactions_service: TransactionsService = Depends(),
 ) -> list[Transaction]:
     return await transactions_service.list_transactions(
-        budget_id, current_user.id, include_lines=include_lines
+        budget.id, include_lines=include_lines
     )
 
 
 @router.get("/{transaction_id}", response_model=TransactionResponse)
 async def get_transaction(
-    budget_id: uuid.UUID,
     transaction_id: uuid.UUID,
     include_lines: bool = True,
-    current_user: User = Depends(get_or_create_current_user),
+    budget: Budget = Depends(require_budget_member("Not authorized to view transactions.")),
     transactions_service: TransactionsService = Depends(),
 ) -> Transaction:
     return await transactions_service.get_transaction(
-        budget_id,
+        budget.id,
         transaction_id,
-        current_user.id,
         include_lines=include_lines,
     )

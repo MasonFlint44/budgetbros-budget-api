@@ -1,6 +1,7 @@
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from budget_api.db import get_session_scope
 from budget_api.tables import (
@@ -67,6 +68,25 @@ async def create_payee(budget_id: UUID) -> UUID:
         )
         await session.flush()
     return payee_id
+
+
+async def create_transaction(
+    async_client, budget_id: str, account_id: str, *, posted_at: str | None = None
+) -> dict:
+    payload: dict[str, object] = {
+        "line": {
+            "account_id": account_id,
+            "amount_minor": -500,
+        }
+    }
+    if posted_at is not None:
+        payload["posted_at"] = posted_at
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json=payload,
+    )
+    assert response.status_code == 201
+    return response.json()
 
 
 async def test_create_transaction(app, async_client) -> None:
@@ -206,3 +226,99 @@ async def test_create_transaction_rejects_zero_amount(app, async_client) -> None
 
     assert response.status_code == 400
     assert response.json()["detail"] == "Amount must be non-zero."
+
+
+async def test_list_transactions_respects_budget_scoping(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    other_budget_id = await create_budget(async_client)
+    other_account_id = await create_account(async_client, other_budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    await create_transaction(async_client, other_budget_id, other_account_id)
+
+    response = await async_client.get(f"/budgets/{budget_id}/transactions")
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == transaction["id"]
+    assert payload[0]["budget_id"] == budget_id
+    assert payload[0]["lines"]
+
+
+async def test_list_transactions_ordered_by_posted_at_created_at_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction_newest = await create_transaction(
+        async_client, budget_id, account_id, posted_at="2025-01-04T10:00:00"
+    )
+    transaction_a = await create_transaction(
+        async_client, budget_id, account_id, posted_at="2025-01-03T10:00:00"
+    )
+    transaction_b = await create_transaction(
+        async_client, budget_id, account_id, posted_at="2025-01-03T10:00:00"
+    )
+    transaction_c = await create_transaction(
+        async_client, budget_id, account_id, posted_at="2025-01-03T10:00:00"
+    )
+
+    transaction_a_id = UUID(transaction_a["id"])
+    transaction_b_id = UUID(transaction_b["id"])
+    transaction_c_id = UUID(transaction_c["id"])
+
+    async with get_session_scope() as session:
+        await session.execute(
+            update(TransactionsTable)
+            .where(TransactionsTable.id == transaction_a_id)
+            .values(created_at=datetime(2025, 1, 2, tzinfo=timezone.utc))
+        )
+        await session.execute(
+            update(TransactionsTable)
+            .where(TransactionsTable.id == transaction_b_id)
+            .values(created_at=datetime(2025, 1, 1, 12, tzinfo=timezone.utc))
+        )
+        await session.execute(
+            update(TransactionsTable)
+            .where(TransactionsTable.id == transaction_c_id)
+            .values(created_at=datetime(2025, 1, 1, 12, tzinfo=timezone.utc))
+        )
+
+    response = await async_client.get(f"/budgets/{budget_id}/transactions")
+
+    assert response.status_code == 200
+    payload = response.json()
+
+    if transaction_b_id.int > transaction_c_id.int:
+        tail_ids = [transaction_b["id"], transaction_c["id"]]
+    else:
+        tail_ids = [transaction_c["id"], transaction_b["id"]]
+
+    assert [item["id"] for item in payload] == [
+        transaction_newest["id"],
+        transaction_a["id"],
+        *tail_ids,
+    ]
+
+
+async def test_list_transactions_excludes_lines_when_requested(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+
+    response = await async_client.get(
+        f"/budgets/{budget_id}/transactions?include_lines=false"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert len(payload) == 1
+    assert payload[0]["id"] == transaction["id"]
+    assert payload[0]["lines"] is None

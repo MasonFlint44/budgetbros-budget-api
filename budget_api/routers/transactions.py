@@ -21,3 +21,15 @@ async def create_transaction(
         payload=payload,
         user_id=current_user.id,
     )
+
+
+@router.get("", response_model=list[TransactionResponse])
+async def list_transactions(
+    budget_id: uuid.UUID,
+    include_lines: bool = True,
+    current_user: User = Depends(get_or_create_current_user),
+    transactions_service: TransactionsService = Depends(),
+) -> list[Transaction]:
+    return await transactions_service.list_transactions(
+        budget_id, current_user.id, include_lines=include_lines
+    )

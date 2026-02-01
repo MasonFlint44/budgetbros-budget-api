@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api import db
@@ -117,8 +117,64 @@ class TransactionsDataAccess:
         )
         return set(result.scalars().all())
 
+    async def list_transactions(
+        self, budget_id: uuid.UUID, *, include_lines: bool = True
+    ) -> list[Transaction]:
+        result = await self._session.execute(
+            select(TransactionsTable)
+            .where(TransactionsTable.budget_id == budget_id)
+            .order_by(
+                desc(TransactionsTable.posted_at),
+                desc(TransactionsTable.created_at),
+                desc(TransactionsTable.id),
+            )
+        )
+        transactions = list(result.scalars())
+        if not include_lines or not transactions:
+            return [_to_transaction(transaction) for transaction in transactions]
 
-def _to_transaction(transaction: TransactionsTable) -> Transaction:
+        transaction_ids = [transaction.id for transaction in transactions]
+        lines_result = await self._session.execute(
+            select(TransactionLinesTable)
+            .where(TransactionLinesTable.transaction_id.in_(transaction_ids))
+            .order_by(TransactionLinesTable.transaction_id, TransactionLinesTable.id)
+        )
+        line_rows = list(lines_result.scalars())
+
+        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
+            line.id: [] for line in line_rows
+        }
+        line_ids = [line.id for line in line_rows]
+        if line_ids:
+            tag_rows = await self._session.execute(
+                select(
+                    TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id
+                )
+                .where(TransactionLineTagsTable.line_id.in_(line_ids))
+                .order_by(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
+            )
+            for line_id, tag_id in tag_rows.all():
+                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
+
+        lines_by_transaction: dict[uuid.UUID, list[TransactionLine]] = {
+            transaction_id: [] for transaction_id in transaction_ids
+        }
+        for line in line_rows:
+            lines_by_transaction.setdefault(line.transaction_id, []).append(
+                _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
+            )
+
+        return [
+            _to_transaction(
+                transaction, lines=lines_by_transaction.get(transaction.id, [])
+            )
+            for transaction in transactions
+        ]
+
+
+def _to_transaction(
+    transaction: TransactionsTable, *, lines: Sequence[TransactionLine] | None = None
+) -> Transaction:
     return Transaction(
         id=transaction.id,
         budget_id=transaction.budget_id,
@@ -127,6 +183,7 @@ def _to_transaction(transaction: TransactionsTable) -> Transaction:
         notes=transaction.notes,
         import_id=transaction.import_id,
         created_at=transaction.created_at,
+        lines=list(lines) if lines is not None else None,
     )
 
 

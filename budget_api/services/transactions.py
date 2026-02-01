@@ -172,3 +172,17 @@ class TransactionsService:
             created_at=transaction.created_at,
             lines=lines,
         )
+
+    async def list_transactions(
+        self,
+        budget_id: uuid.UUID,
+        user_id: uuid.UUID,
+        *,
+        include_lines: bool = True,
+    ) -> list[Transaction]:
+        await self._get_budget_for_member(
+            budget_id, user_id, detail="Not authorized to view transactions."
+        )
+        return await self._transactions_store.list_transactions(
+            budget_id, include_lines=include_lines
+        )

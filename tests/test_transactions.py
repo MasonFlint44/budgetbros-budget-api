@@ -322,3 +322,56 @@ async def test_list_transactions_excludes_lines_when_requested(
     assert len(payload) == 1
     assert payload[0]["id"] == transaction["id"]
     assert payload[0]["lines"] is None
+
+
+async def test_get_transaction_returns_200(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+
+    response = await async_client.get(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == transaction["id"]
+    assert payload["budget_id"] == budget_id
+    assert payload["lines"]
+    assert payload["lines"][0]["account_id"] == account_id
+
+
+async def test_get_transaction_excludes_lines_when_requested(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+
+    response = await async_client.get(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}?include_lines=false"
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == transaction["id"]
+    assert payload["lines"] is None
+
+
+async def test_get_transaction_from_another_budget_returns_404(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    transaction = await create_transaction(async_client, budget_id, account_id)
+
+    other_budget_id = await create_budget(async_client)
+
+    response = await async_client.get(
+        f"/budgets/{other_budget_id}/transactions/{transaction['id']}"
+    )
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Transaction not found."

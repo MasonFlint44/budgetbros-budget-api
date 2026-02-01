@@ -171,6 +171,41 @@ class TransactionsDataAccess:
             for transaction in transactions
         ]
 
+    async def get_transaction(
+        self, transaction_id: uuid.UUID, *, include_lines: bool = True
+    ) -> Transaction | None:
+        transaction = await self._session.get(TransactionsTable, transaction_id)
+        if transaction is None:
+            return None
+        if not include_lines:
+            return _to_transaction(transaction)
+
+        lines_result = await self._session.execute(
+            select(TransactionLinesTable)
+            .where(TransactionLinesTable.transaction_id == transaction_id)
+            .order_by(TransactionLinesTable.id)
+        )
+        line_rows = list(lines_result.scalars())
+
+        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
+            line.id: [] for line in line_rows
+        }
+        line_ids = [line.id for line in line_rows]
+        if line_ids:
+            tag_rows = await self._session.execute(
+                select(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
+                .where(TransactionLineTagsTable.line_id.in_(line_ids))
+                .order_by(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
+            )
+            for line_id, tag_id in tag_rows.all():
+                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
+
+        lines = [
+            _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
+            for line in line_rows
+        ]
+        return _to_transaction(transaction, lines=lines)
+
 
 def _to_transaction(
     transaction: TransactionsTable, *, lines: Sequence[TransactionLine] | None = None

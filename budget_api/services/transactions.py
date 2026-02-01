@@ -186,3 +186,24 @@ class TransactionsService:
         return await self._transactions_store.list_transactions(
             budget_id, include_lines=include_lines
         )
+
+    async def get_transaction(
+        self,
+        budget_id: uuid.UUID,
+        transaction_id: uuid.UUID,
+        user_id: uuid.UUID,
+        *,
+        include_lines: bool = True,
+    ) -> Transaction:
+        await self._get_budget_for_member(
+            budget_id, user_id, detail="Not authorized to view transactions."
+        )
+        transaction = await self._transactions_store.get_transaction(
+            transaction_id, include_lines=include_lines
+        )
+        if transaction is None or transaction.budget_id != budget_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found.",
+            )
+        return transaction

@@ -33,3 +33,19 @@ async def list_transactions(
     return await transactions_service.list_transactions(
         budget_id, current_user.id, include_lines=include_lines
     )
+
+
+@router.get("/{transaction_id}", response_model=TransactionResponse)
+async def get_transaction(
+    budget_id: uuid.UUID,
+    transaction_id: uuid.UUID,
+    include_lines: bool = True,
+    current_user: User = Depends(get_or_create_current_user),
+    transactions_service: TransactionsService = Depends(),
+) -> Transaction:
+    return await transactions_service.get_transaction(
+        budget_id,
+        transaction_id,
+        current_user.id,
+        include_lines=include_lines,
+    )

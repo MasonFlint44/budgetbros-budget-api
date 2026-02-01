@@ -7,6 +7,7 @@ from datetime import datetime
 from fastapi import Depends
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
 
 from budget_api import db
 from budget_api.models import (
@@ -117,49 +118,10 @@ class TransactionsDataAccess:
         )
         return set(result.scalars().all())
 
-    async def _list_lines_with_tags(
-        self, transaction_ids: Sequence[uuid.UUID]
-    ) -> dict[uuid.UUID, list[TransactionLine]]:
-        if not transaction_ids:
-            return {}
-
-        lines_result = await self._session.execute(
-            select(TransactionLinesTable)
-            .where(TransactionLinesTable.transaction_id.in_(transaction_ids))
-            .order_by(TransactionLinesTable.transaction_id, TransactionLinesTable.id)
-        )
-        line_rows = list(lines_result.scalars())
-
-        tag_ids_by_line: dict[uuid.UUID, list[uuid.UUID]] = {
-            line.id: [] for line in line_rows
-        }
-        line_ids = [line.id for line in line_rows]
-        if line_ids:
-            tag_rows = await self._session.execute(
-                select(TransactionLineTagsTable.line_id, TransactionLineTagsTable.tag_id)
-                .where(TransactionLineTagsTable.line_id.in_(line_ids))
-                .order_by(
-                    TransactionLineTagsTable.line_id,
-                    TransactionLineTagsTable.tag_id,
-                )
-            )
-            for line_id, tag_id in tag_rows.all():
-                tag_ids_by_line.setdefault(line_id, []).append(tag_id)
-
-        lines_by_transaction: dict[uuid.UUID, list[TransactionLine]] = {
-            transaction_id: [] for transaction_id in transaction_ids
-        }
-        for line in line_rows:
-            lines_by_transaction.setdefault(line.transaction_id, []).append(
-                _to_transaction_line(line, tag_ids=tag_ids_by_line.get(line.id, []))
-            )
-
-        return lines_by_transaction
-
     async def list_transactions(
         self, budget_id: uuid.UUID, *, include_lines: bool = True
     ) -> list[Transaction]:
-        result = await self._session.execute(
+        statement = (
             select(TransactionsTable)
             .where(TransactionsTable.budget_id == budget_id)
             .order_by(
@@ -168,16 +130,21 @@ class TransactionsDataAccess:
                 desc(TransactionsTable.id),
             )
         )
-        transactions = list(result.scalars())
+        if include_lines:
+            statement = statement.options(
+                selectinload(TransactionsTable.lines).selectinload(
+                    TransactionLinesTable.tag_links
+                )
+            )
+
+        result = await self._session.execute(statement)
+        transactions = list(result.scalars().unique())
         if not include_lines or not transactions:
             return [_to_transaction(transaction) for transaction in transactions]
 
-        transaction_ids = [transaction.id for transaction in transactions]
-        lines_by_transaction = await self._list_lines_with_tags(transaction_ids)
-
         return [
             _to_transaction(
-                transaction, lines=lines_by_transaction.get(transaction.id, [])
+                transaction, lines=_to_transaction_lines(transaction.lines)
             )
             for transaction in transactions
         ]
@@ -185,16 +152,22 @@ class TransactionsDataAccess:
     async def get_transaction(
         self, transaction_id: uuid.UUID, *, include_lines: bool = True
     ) -> Transaction | None:
-        transaction = await self._session.get(TransactionsTable, transaction_id)
+        options = []
+        if include_lines:
+            options = [
+                selectinload(TransactionsTable.lines).selectinload(
+                    TransactionLinesTable.tag_links
+                )
+            ]
+        transaction = await self._session.get(
+            TransactionsTable, transaction_id, options=options
+        )
         if transaction is None:
             return None
         if not include_lines:
             return _to_transaction(transaction)
 
-        lines_by_transaction = await self._list_lines_with_tags([transaction_id])
-        return _to_transaction(
-            transaction, lines=lines_by_transaction.get(transaction_id, [])
-        )
+        return _to_transaction(transaction, lines=_to_transaction_lines(transaction.lines))
 
 
 def _to_transaction(
@@ -225,3 +198,20 @@ def _to_transaction_line(
         memo=line.memo,
         tag_ids=list(tag_ids) if tag_ids else [],
     )
+
+
+def _to_transaction_lines(
+    lines: Sequence[TransactionLinesTable],
+) -> list[TransactionLine]:
+    sorted_lines = sorted(lines, key=lambda line: line.id)
+    return [
+        _to_transaction_line(line, tag_ids=_sorted_tag_ids(line))
+        for line in sorted_lines
+    ]
+
+
+def _sorted_tag_ids(line: TransactionLinesTable) -> list[uuid.UUID]:
+    if not line.tag_links:
+        return []
+    sorted_links = sorted(line.tag_links, key=lambda link: link.tag_id)
+    return [link.tag_id for link in sorted_links]

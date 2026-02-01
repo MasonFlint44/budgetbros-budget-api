@@ -1,10 +1,10 @@
 import uuid
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, status
 
 from budget_api.dependencies import require_budget_member
 from budget_api.models import Account, AccountCreate, AccountResponse, AccountUpdate, Budget
-from budget_api.routers.utils import reject_null_updates
+from budget_api.routers.utils import extract_updates
 from budget_api.services import AccountsService
 
 router = APIRouter(prefix="/budgets/{budget_id}/accounts")
@@ -40,14 +40,7 @@ async def update_account(
     budget: Budget = Depends(require_budget_member("Not authorized to manage accounts.")),
     accounts_service: AccountsService = Depends(),
 ) -> Account:
-    updates = payload.model_dump(exclude_unset=True)
-    reject_null_updates(updates)
-    if not updates:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="No fields to update.",
-        )
-
+    updates = extract_updates(payload)
     return await accounts_service.update_account(budget, account_id, updates)
 
 

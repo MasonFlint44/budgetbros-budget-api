@@ -26,7 +26,9 @@ async def create_transaction(
 @router.get("", response_model=list[TransactionResponse])
 async def list_transactions(
     include_lines: bool = True,
-    budget: Budget = Depends(require_budget_member("Not authorized to view transactions.")),
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to view transactions.")
+    ),
     transactions_service: TransactionsService = Depends(),
 ) -> list[Transaction]:
     return await transactions_service.list_transactions(
@@ -38,7 +40,9 @@ async def list_transactions(
 async def get_transaction(
     transaction_id: uuid.UUID,
     include_lines: bool = True,
-    budget: Budget = Depends(require_budget_member("Not authorized to view transactions.")),
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to view transactions.")
+    ),
     transactions_service: TransactionsService = Depends(),
 ) -> Transaction:
     return await transactions_service.get_transaction(

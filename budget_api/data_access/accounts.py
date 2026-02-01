@@ -3,7 +3,7 @@ from __future__ import annotations
 import uuid
 
 from fastapi import Depends
-from sqlalchemy import select
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from budget_api import db
@@ -40,13 +40,21 @@ class AccountsDataAccess:
             return None
         return _to_account(account)
 
-    async def list_accounts(self, budget_id: uuid.UUID) -> list[Account]:
+    async def list_accounts_by_budget(self, budget_id: uuid.UUID) -> list[Account]:
         result = await self._session.execute(
             select(AccountsTable)
             .where(AccountsTable.budget_id == budget_id)
             .order_by(AccountsTable.created_at)
         )
         return [_to_account(account) for account in result.scalars()]
+
+    async def deactivate_accounts_by_budget(self, budget_id: uuid.UUID) -> None:
+        await self._session.execute(
+            update(AccountsTable)
+            .where(AccountsTable.budget_id == budget_id)
+            .values(is_active=False)
+        )
+        await self._session.flush()
 
     async def create_account(
         self,
@@ -55,14 +63,14 @@ class AccountsDataAccess:
         name: str,
         type: str,
         currency_code: str,
-        is_closed: bool,
+        is_active: bool,
     ) -> Account:
         account = AccountsTable(
             budget_id=budget_id,
             name=name,
             type=type,
             currency_code=currency_code,
-            is_closed=is_closed,
+            is_active=is_active,
         )
         self._session.add(account)
         await self._session.flush()
@@ -97,6 +105,6 @@ def _to_account(account: AccountsTable) -> Account:
         name=account.name,
         type=AccountType(account.type),
         currency_code=account.currency_code,
-        is_closed=account.is_closed,
+        is_active=account.is_active,
         created_at=account.created_at,
     )

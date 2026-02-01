@@ -85,18 +85,17 @@ class AccountType(str, Enum):
 
 
 class AccountCreate(BaseModel):
-    budget_id: uuid.UUID
     name: str = Field(..., min_length=1, max_length=120)
     type: AccountType = AccountType.checking
     currency_code: str = Field(..., min_length=3, max_length=3)
-    is_closed: bool = False
+    is_active: bool = True
 
 
 class AccountUpdate(BaseModel):
     name: str | None = Field(None, min_length=1, max_length=120)
     type: AccountType | None = None
     currency_code: str | None = Field(None, min_length=3, max_length=3)
-    is_closed: bool | None = None
+    is_active: bool | None = None
 
 
 class AccountResponse(BaseModel):
@@ -105,7 +104,7 @@ class AccountResponse(BaseModel):
     name: str
     type: AccountType
     currency_code: str
-    is_closed: bool
+    is_active: bool
     created_at: datetime
 
 
@@ -116,5 +115,5 @@ class Account:
     name: str
     type: AccountType
     currency_code: str
-    is_closed: bool
+    is_active: bool
     created_at: datetime

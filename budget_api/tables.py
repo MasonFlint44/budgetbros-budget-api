@@ -170,7 +170,7 @@ class AccountsTable(Base):
         ForeignKey("currencies.code", ondelete="RESTRICT"),
         nullable=False,
     )
-    is_closed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()

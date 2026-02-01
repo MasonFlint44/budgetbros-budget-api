@@ -16,7 +16,9 @@ async def test_create_budget_creates_membership(app, async_client) -> None:
     budget_id = UUID(response.json()["id"])
 
     async with get_session_scope() as session:
-        result = await session.execute(select(UsersTable))
+        result = await session.execute(
+            select(UsersTable).where(UsersTable.email == "masonflint44@gmail.com")
+        )
         user = result.scalar_one_or_none()
         assert user is not None
 

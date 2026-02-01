@@ -4,7 +4,11 @@ import uuid
 
 from fastapi import Depends, HTTPException, status
 
-from budget_api.data_access import BudgetsDataAccess, CurrenciesDataAccess
+from budget_api.data_access import (
+    AccountsDataAccess,
+    BudgetsDataAccess,
+    CurrenciesDataAccess,
+)
 from budget_api.models import Budget, BudgetMember
 
 
@@ -13,9 +17,11 @@ class BudgetsService:
         self,
         budgets_store: BudgetsDataAccess = Depends(),
         currencies_store: CurrenciesDataAccess = Depends(),
+        accounts_store: AccountsDataAccess = Depends(),
     ) -> None:
         self._budgets_store = budgets_store
         self._currencies_store = currencies_store
+        self._accounts_store = accounts_store
 
     async def create_budget(
         self, name: str, base_currency_code: str, owner_user_id: uuid.UUID
@@ -64,6 +70,8 @@ class BudgetsService:
                     status_code=status.HTTP_400_BAD_REQUEST,
                     detail="Unknown base currency code.",
                 )
+            if currency_code != budget.base_currency_code:
+                await self._accounts_store.deactivate_accounts_by_budget(budget_id)
             updates["base_currency_code"] = currency_code
 
         updated_budget = await self._budgets_store.update_budget(budget_id, updates)

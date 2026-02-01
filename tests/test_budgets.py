@@ -4,7 +4,7 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
-from budget_api.tables import BudgetMembersTable, BudgetsTable, UsersTable
+from budget_api.tables import AccountsTable, BudgetMembersTable, BudgetsTable, UsersTable
 from budget_api.db import get_session_scope
 
 
@@ -238,6 +238,75 @@ async def test_update_budget_normalizes_currency_code(app, async_client) -> None
 
     assert update_response.status_code == 200
     assert update_response.json()["base_currency_code"] == "EUR"
+
+
+async def test_update_budget_deactivates_accounts_on_currency_change(
+    app, async_client
+) -> None:
+    response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+    budget_id = response.json()["id"]
+
+    account_response = await async_client.post(
+        f"/budgets/{budget_id}/accounts",
+        json={
+            "name": "Checking",
+            "type": "checking",
+            "currency_code": "USD",
+        },
+    )
+    assert account_response.status_code == 201
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}", json={"base_currency_code": "EUR"}
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["base_currency_code"] == "EUR"
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(AccountsTable).where(AccountsTable.budget_id == budget_id)
+        )
+        accounts = result.scalars().all()
+        assert accounts
+        assert all(account.is_active is False for account in accounts)
+
+
+async def test_update_budget_allows_base_currency_when_accounts_inactive(
+    app, async_client
+) -> None:
+    response = await async_client.post(
+        "/budgets", json={"name": "Household", "base_currency_code": "USD"}
+    )
+    budget_id = response.json()["id"]
+
+    account_response = await async_client.post(
+        f"/budgets/{budget_id}/accounts",
+        json={
+            "name": "Legacy",
+            "type": "checking",
+            "currency_code": "USD",
+            "is_active": False,
+        },
+    )
+    assert account_response.status_code == 201
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}", json={"base_currency_code": "EUR"}
+    )
+
+    assert update_response.status_code == 200
+    assert update_response.json()["base_currency_code"] == "EUR"
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(AccountsTable).where(AccountsTable.budget_id == budget_id)
+        )
+        accounts = result.scalars().all()
+        assert accounts
+        assert all(account.is_active is False for account in accounts)
 
 
 async def test_delete_budget_not_found(app, async_client) -> None:

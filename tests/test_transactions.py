@@ -662,6 +662,107 @@ async def test_update_transaction_rejects_setting_import_id(
     assert update_response.json()["detail"] == "Import id cannot be updated."
 
 
+async def test_split_transaction_replaces_lines(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    category_id = await create_category(UUID(budget_id))
+    payee_id = await create_payee(UUID(budget_id))
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = UUID(transaction["id"])
+    original_line_id = UUID(transaction["lines"][0]["id"])
+
+    extra_line_id = await add_transaction_line(
+        transaction_id, UUID(account_id), amount_minor=-200, memo="Old extra"
+    )
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/{transaction_id}/split",
+        json={
+            "lines": [
+                {
+                    "account_id": account_id,
+                    "category_id": str(category_id),
+                    "amount_minor": -300,
+                    "memo": "Groceries",
+                },
+                {
+                    "account_id": account_id,
+                    "payee_id": str(payee_id),
+                    "amount_minor": -150,
+                    "memo": "Snacks",
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == str(transaction_id)
+    assert payload["lines"]
+    assert len(payload["lines"]) == 2
+
+    lines_by_amount = {line["amount_minor"]: line for line in payload["lines"]}
+    assert set(lines_by_amount.keys()) == {-300, -150}
+
+    line_minus_300 = lines_by_amount[-300]
+    assert line_minus_300["account_id"] == account_id
+    assert line_minus_300["category_id"] == str(category_id)
+    assert line_minus_300["payee_id"] is None
+    assert line_minus_300["memo"] == "Groceries"
+
+    line_minus_150 = lines_by_amount[-150]
+    assert line_minus_150["account_id"] == account_id
+    assert line_minus_150["category_id"] is None
+    assert line_minus_150["payee_id"] == str(payee_id)
+    assert line_minus_150["memo"] == "Snacks"
+
+    new_total = sum(line["amount_minor"] for line in payload["lines"])
+    assert new_total != -700
+
+    new_line_ids = {UUID(line["id"]) for line in payload["lines"]}
+    assert original_line_id not in new_line_ids
+    assert extra_line_id not in new_line_ids
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(TransactionLinesTable).where(
+                TransactionLinesTable.transaction_id == transaction_id
+            )
+        )
+        lines = result.scalars().all()
+        assert len(lines) == 2
+        assert {line.id for line in lines} == new_line_ids
+
+
+async def test_split_transaction_rejects_transfer(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    other_account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = UUID(transaction["id"])
+
+    await add_transaction_line(
+        transaction_id, UUID(other_account_id), amount_minor=500
+    )
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/{transaction_id}/split",
+        json={
+            "lines": [
+                {
+                    "account_id": account_id,
+                    "amount_minor": -500,
+                }
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Transfer transactions cannot be split."
+
+
 async def test_delete_transaction_removes_lines(app, async_client) -> None:
     budget_id = await create_budget(async_client)
     account_id = await create_account(async_client, budget_id)

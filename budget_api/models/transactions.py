@@ -32,6 +32,10 @@ class TransactionCreate(BaseModel):
     line: TransactionLineCreate
 
 
+class TransactionSplitCreate(BaseModel):
+    lines: list[TransactionLineCreate]
+
+
 class TransactionLineUpdate(BaseModel):
     line_id: uuid.UUID
     account_id: uuid.UUID | None = None

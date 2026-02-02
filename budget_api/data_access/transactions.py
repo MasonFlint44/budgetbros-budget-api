@@ -208,6 +208,19 @@ class TransactionsDataAccess:
                 setattr(line, field, value)
         await self._session.flush()
 
+    async def replace_transaction_lines(
+        self, transaction_id: uuid.UUID, lines: Sequence[TransactionLineDraft]
+    ) -> list[TransactionLine]:
+        await self._session.execute(
+            delete(TransactionLinesTable).where(
+                TransactionLinesTable.transaction_id == transaction_id
+            )
+        )
+        await self._session.flush()
+        if not lines:
+            return []
+        return await self.create_transaction_lines(transaction_id, lines)
+
     async def replace_transaction_line_tags(
         self, tag_updates: dict[uuid.UUID, Sequence[uuid.UUID]]
     ) -> None:

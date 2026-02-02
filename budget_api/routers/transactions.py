@@ -8,6 +8,7 @@ from budget_api.models import (
     Transaction,
     TransactionCreate,
     TransactionResponse,
+    TransactionSplitCreate,
     TransactionUpdate,
 )
 from budget_api.services import TransactionsService
@@ -68,6 +69,22 @@ async def update_transaction(
     transactions_service: TransactionsService = Depends(),
 ) -> Transaction:
     return await transactions_service.update_transaction(
+        budget_id=budget.id,
+        transaction_id=transaction_id,
+        payload=payload,
+    )
+
+
+@router.post("/{transaction_id}/split", response_model=TransactionResponse)
+async def split_transaction(
+    transaction_id: uuid.UUID,
+    payload: TransactionSplitCreate,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to update transactions.")
+    ),
+    transactions_service: TransactionsService = Depends(),
+) -> Transaction:
+    return await transactions_service.split_transaction(
         budget_id=budget.id,
         transaction_id=transaction_id,
         payload=payload,

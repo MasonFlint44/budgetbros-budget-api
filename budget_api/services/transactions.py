@@ -13,6 +13,7 @@ from budget_api.models import (
     TransactionCreate,
     TransactionLineDraft,
     TransactionLineUpdate,
+    TransactionSplitCreate,
     TransactionStatus,
     TransactionUpdate,
 )
@@ -266,6 +267,116 @@ class TransactionsService:
                 detail="Transaction not found.",
             )
         return transaction
+
+    async def split_transaction(
+        self,
+        *,
+        budget_id: uuid.UUID,
+        transaction_id: uuid.UUID,
+        payload: TransactionSplitCreate,
+    ) -> Transaction:
+        transaction = await self._transactions_store.get_transaction(
+            transaction_id, include_lines=True
+        )
+        if transaction is None or transaction.budget_id != budget_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found.",
+            )
+
+        existing_lines = transaction.lines or []
+        if not existing_lines:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid transaction lines.",
+            )
+
+        existing_snapshots = [
+            LineSnapshot(
+                id=line.id,
+                account_id=line.account_id,
+                category_id=line.category_id,
+                payee_id=line.payee_id,
+                amount_minor=line.amount_minor,
+                memo=line.memo,
+                tag_ids=list(line.tag_ids),
+            )
+            for line in existing_lines
+        ]
+
+        if _is_valid_transfer(existing_snapshots):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transfer transactions cannot be split.",
+            )
+        if not _is_valid_non_transfer(existing_snapshots):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid transaction lines.",
+            )
+
+        if not payload.lines:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="No lines provided.",
+            )
+
+        existing_account_id = existing_snapshots[0].account_id
+        category_cache: dict[uuid.UUID, bool] = {}
+        payee_cache: dict[uuid.UUID, bool] = {}
+        tag_ids_to_validate: list[uuid.UUID] = []
+        new_lines: list[TransactionLineDraft] = []
+
+        for line in payload.lines:
+            if line.account_id != existing_account_id:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Account does not match transaction.",
+                )
+            if line.amount_minor == 0:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Amount must be non-zero.",
+                )
+            if line.category_id is not None:
+                await self._require_category(
+                    budget_id, line.category_id, cache=category_cache
+                )
+            if line.payee_id is not None:
+                await self._require_payee(
+                    budget_id, line.payee_id, cache=payee_cache
+                )
+
+            tag_ids = _dedupe_tag_ids(line.tag_ids or [])
+            tag_ids_to_validate.extend(tag_ids)
+
+            new_lines.append(
+                TransactionLineDraft(
+                    account_id=line.account_id,
+                    category_id=line.category_id,
+                    payee_id=line.payee_id,
+                    amount_minor=line.amount_minor,
+                    memo=line.memo,
+                    tag_ids=tag_ids,
+                )
+            )
+
+        if tag_ids_to_validate:
+            await self._require_tags(budget_id, tag_ids_to_validate)
+
+        await self._transactions_store.replace_transaction_lines(
+            transaction_id, new_lines
+        )
+
+        updated_transaction = await self._transactions_store.get_transaction(
+            transaction_id, include_lines=True
+        )
+        if updated_transaction is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found.",
+            )
+        return updated_transaction
 
     async def update_transaction(
         self,

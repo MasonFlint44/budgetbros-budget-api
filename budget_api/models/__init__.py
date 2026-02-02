@@ -24,6 +24,7 @@ from .transactions import (
     TransactionLineUpdate,
     TransactionLineResponse,
     TransactionResponse,
+    TransactionSplitCreate,
     TransactionStatus,
     TransactionUpdate,
 )

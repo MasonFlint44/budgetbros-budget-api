@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from datetime import datetime
 
 from fastapi import Depends
-from sqlalchemy import desc, select
+from sqlalchemy import delete, desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -14,6 +14,7 @@ from budget_api.models import (
     Transaction,
     TransactionLine,
     TransactionLineDraft,
+    TransactionLineUpdate,
     TransactionStatus,
 )
 from budget_api.tables import (
@@ -168,6 +169,57 @@ class TransactionsDataAccess:
             return _to_transaction(transaction)
 
         return _to_transaction(transaction, lines=_to_transaction_lines(transaction.lines))
+
+    async def update_transaction(
+        self, transaction_id: uuid.UUID, updates: dict[str, object]
+    ) -> Transaction | None:
+        transaction = await self._session.get(TransactionsTable, transaction_id)
+        if transaction is None:
+            return None
+        for field, value in updates.items():
+            setattr(transaction, field, value)
+        await self._session.flush()
+        await self._session.refresh(transaction)
+        return _to_transaction(transaction)
+
+    async def update_transaction_lines(
+        self, line_updates: Sequence[TransactionLineUpdate]
+    ) -> None:
+        if not line_updates:
+            return
+        for update in line_updates:
+            line = await self._session.get(TransactionLinesTable, update.line_id)
+            if line is None:
+                continue
+            updates = update.model_dump(exclude_unset=True)
+            updates.pop("line_id", None)
+            updates.pop("tag_ids", None)
+            if not updates:
+                continue
+            for field, value in updates.items():
+                setattr(line, field, value)
+        await self._session.flush()
+
+    async def replace_transaction_line_tags(
+        self, tag_updates: dict[uuid.UUID, Sequence[uuid.UUID]]
+    ) -> None:
+        if not tag_updates:
+            return
+        line_ids = list(tag_updates.keys())
+        await self._session.execute(
+            delete(TransactionLineTagsTable).where(
+                TransactionLineTagsTable.line_id.in_(line_ids)
+            )
+        )
+        tag_links: list[TransactionLineTagsTable] = []
+        for line_id, tag_ids in tag_updates.items():
+            for tag_id in tag_ids:
+                tag_links.append(
+                    TransactionLineTagsTable(line_id=line_id, tag_id=tag_id)
+                )
+        if tag_links:
+            self._session.add_all(tag_links)
+        await self._session.flush()
 
 
 def _to_transaction(

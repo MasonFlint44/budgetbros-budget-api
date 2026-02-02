@@ -21,8 +21,10 @@ from .transactions import (
     TransactionLine,
     TransactionLineCreate,
     TransactionLineDraft,
+    TransactionLineUpdate,
     TransactionLineResponse,
     TransactionResponse,
     TransactionStatus,
+    TransactionUpdate,
 )
 from .users import User

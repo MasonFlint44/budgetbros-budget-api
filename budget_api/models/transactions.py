@@ -32,6 +32,24 @@ class TransactionCreate(BaseModel):
     line: TransactionLineCreate
 
 
+class TransactionLineUpdate(BaseModel):
+    line_id: uuid.UUID
+    account_id: uuid.UUID | None = None
+    category_id: uuid.UUID | None = None
+    payee_id: uuid.UUID | None = None
+    amount_minor: int | None = None
+    memo: str | None = Field(None, max_length=300)
+    tag_ids: list[uuid.UUID] | None = None
+
+
+class TransactionUpdate(BaseModel):
+    posted_at: datetime | None = None
+    status: str | None = Field(None, max_length=20)
+    notes: str | None = Field(None, max_length=500)
+    import_id: str | None = Field(None, max_length=200)
+    lines: list[TransactionLineUpdate] | None = None
+
+
 class TransactionLineResponse(BaseModel):
     id: uuid.UUID
     transaction_id: uuid.UUID

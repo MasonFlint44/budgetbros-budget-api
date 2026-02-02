@@ -89,6 +89,32 @@ async def create_transaction(
     return response.json()
 
 
+async def add_transaction_line(
+    transaction_id: UUID,
+    account_id: UUID,
+    *,
+    category_id: UUID | None = None,
+    payee_id: UUID | None = None,
+    amount_minor: int = -500,
+    memo: str | None = None,
+) -> UUID:
+    line_id = uuid4()
+    async with get_session_scope() as session:
+        session.add(
+            TransactionLinesTable(
+                id=line_id,
+                transaction_id=transaction_id,
+                account_id=account_id,
+                category_id=category_id,
+                payee_id=payee_id,
+                amount_minor=amount_minor,
+                memo=memo,
+            )
+        )
+        await session.flush()
+    return line_id
+
+
 async def test_create_transaction(app, async_client) -> None:
     budget_id = await create_budget(async_client)
     account_id = await create_account(async_client, budget_id)
@@ -375,3 +401,262 @@ async def test_get_transaction_from_another_budget_returns_404(
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Transaction not found."
+
+
+async def test_update_transaction_fields(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = transaction["id"]
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction_id}",
+        json={
+            "posted_at": "2025-02-03T04:05:06",
+            "status": "RECONCILED",
+            "notes": "Updated",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["id"] == transaction_id
+    assert payload["status"] == "reconciled"
+    assert payload["notes"] == "Updated"
+    assert payload["posted_at"].startswith("2025-02-03T04:05:06")
+    assert payload["posted_at"].endswith(("Z", "+00:00"))
+    assert payload["lines"]
+
+    async with get_session_scope() as session:
+        transaction_row = await session.get(TransactionsTable, UUID(transaction_id))
+        assert transaction_row is not None
+        assert transaction_row.status == "reconciled"
+        assert transaction_row.notes == "Updated"
+
+
+async def test_update_transaction_with_line_edits(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    category_id = await create_category(UUID(budget_id))
+    payee_id = await create_payee(UUID(budget_id))
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "notes": "Original",
+            "line": {
+                "account_id": account_id,
+                "category_id": str(category_id),
+                "payee_id": str(payee_id),
+                "amount_minor": -500,
+                "memo": "Original memo",
+            },
+        },
+    )
+    assert response.status_code == 201
+    payload = response.json()
+    transaction_id = payload["id"]
+    line_id = payload["lines"][0]["id"]
+
+    new_category_id = await create_category(UUID(budget_id))
+    new_payee_id = await create_payee(UUID(budget_id))
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction_id}",
+        json={
+            "lines": [
+                {
+                    "line_id": line_id,
+                    "amount_minor": -600,
+                    "memo": "Updated memo",
+                    "category_id": str(new_category_id),
+                    "payee_id": str(new_payee_id),
+                }
+            ]
+        },
+    )
+
+    assert update_response.status_code == 200
+    updated = update_response.json()
+    updated_line = updated["lines"][0]
+    assert updated_line["id"] == line_id
+    assert updated_line["amount_minor"] == -600
+    assert updated_line["memo"] == "Updated memo"
+    assert updated_line["category_id"] == str(new_category_id)
+    assert updated_line["payee_id"] == str(new_payee_id)
+
+    async with get_session_scope() as session:
+        line_row = await session.get(TransactionLinesTable, UUID(line_id))
+        assert line_row is not None
+        assert line_row.amount_minor == -600
+        assert line_row.memo == "Updated memo"
+        assert line_row.category_id == new_category_id
+        assert line_row.payee_id == new_payee_id
+
+
+async def test_update_transaction_rejects_unknown_line_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    transaction = await create_transaction(async_client, budget_id, account_id)
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}",
+        json={"lines": [{"line_id": str(uuid4()), "memo": "Updated"}]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Line not found."
+
+
+async def test_update_transaction_rejects_duplicate_line_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    line_id = transaction["lines"][0]["id"]
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}",
+        json={
+            "lines": [
+                {"line_id": line_id, "memo": "Updated"},
+                {"line_id": line_id, "memo": "Updated again"},
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Duplicate line_id."
+
+
+async def test_update_transaction_rejects_line_from_another_transaction(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    first = await create_transaction(async_client, budget_id, account_id)
+    second = await create_transaction(async_client, budget_id, account_id)
+    other_line_id = second["lines"][0]["id"]
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{first['id']}",
+        json={"lines": [{"line_id": other_line_id, "memo": "Updated"}]},
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Line not found."
+
+
+async def test_update_transaction_rejects_non_transfer_multiple_accounts(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    other_account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = UUID(transaction["id"])
+
+    second_line_id = await add_transaction_line(
+        transaction_id, UUID(account_id), amount_minor=-200
+    )
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}",
+        json={
+            "lines": [
+                {"line_id": str(second_line_id), "account_id": other_account_id}
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid transaction lines."
+
+
+async def test_update_transaction_rejects_invalid_transfer_invariants(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    other_account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = UUID(transaction["id"])
+
+    transfer_line_id = await add_transaction_line(
+        transaction_id, UUID(other_account_id), amount_minor=500
+    )
+
+    response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction['id']}",
+        json={
+            "lines": [
+                {"line_id": str(transfer_line_id), "amount_minor": 400}
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Invalid transaction lines."
+
+
+async def test_update_transaction_rejects_import_id_change(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+    import_id = f"import-{uuid4()}"
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "import_id": import_id,
+            "line": {
+                "account_id": account_id,
+                "amount_minor": -500,
+            },
+        },
+    )
+    assert response.status_code == 201
+    transaction_id = response.json()["id"]
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction_id}",
+        json={"import_id": f"import-{uuid4()}"},
+    )
+
+    assert update_response.status_code == 400
+    assert update_response.json()["detail"] == "Import id cannot be updated."
+
+
+async def test_update_transaction_rejects_setting_import_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "line": {
+                "account_id": account_id,
+                "amount_minor": -500,
+            },
+        },
+    )
+    assert response.status_code == 201
+    transaction_id = response.json()["id"]
+
+    update_response = await async_client.patch(
+        f"/budgets/{budget_id}/transactions/{transaction_id}",
+        json={"import_id": f"import-{uuid4()}"},
+    )
+
+    assert update_response.status_code == 400
+    assert update_response.json()["detail"] == "Import id cannot be updated."

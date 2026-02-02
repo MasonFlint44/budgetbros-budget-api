@@ -3,7 +3,13 @@ import uuid
 from fastapi import APIRouter, Depends, status
 
 from budget_api.dependencies import require_budget_member
-from budget_api.models import Budget, Transaction, TransactionCreate, TransactionResponse
+from budget_api.models import (
+    Budget,
+    Transaction,
+    TransactionCreate,
+    TransactionResponse,
+    TransactionUpdate,
+)
 from budget_api.services import TransactionsService
 
 router = APIRouter(prefix="/budgets/{budget_id}/transactions")
@@ -49,4 +55,20 @@ async def get_transaction(
         budget.id,
         transaction_id,
         include_lines=include_lines,
+    )
+
+
+@router.patch("/{transaction_id}", response_model=TransactionResponse)
+async def update_transaction(
+    transaction_id: uuid.UUID,
+    payload: TransactionUpdate,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to update transactions.")
+    ),
+    transactions_service: TransactionsService = Depends(),
+) -> Transaction:
+    return await transactions_service.update_transaction(
+        budget_id=budget.id,
+        transaction_id=transaction_id,
+        payload=payload,
     )

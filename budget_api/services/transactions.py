@@ -497,3 +497,24 @@ class TransactionsService:
                 detail="Transaction not found.",
             )
         return updated_transaction
+
+    async def delete_transaction(
+        self,
+        *,
+        budget_id: uuid.UUID,
+        transaction_id: uuid.UUID,
+    ) -> None:
+        transaction = await self._transactions_store.get_transaction(
+            transaction_id, include_lines=False
+        )
+        if transaction is None or transaction.budget_id != budget_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found.",
+            )
+        deleted = await self._transactions_store.delete_transaction(transaction_id)
+        if not deleted:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Transaction not found.",
+            )

@@ -72,3 +72,17 @@ async def update_transaction(
         transaction_id=transaction_id,
         payload=payload,
     )
+
+
+@router.delete("/{transaction_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_transaction(
+    transaction_id: uuid.UUID,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to delete transactions.")
+    ),
+    transactions_service: TransactionsService = Depends(),
+) -> None:
+    await transactions_service.delete_transaction(
+        budget_id=budget.id,
+        transaction_id=transaction_id,
+    )

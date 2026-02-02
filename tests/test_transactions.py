@@ -660,3 +660,66 @@ async def test_update_transaction_rejects_setting_import_id(
 
     assert update_response.status_code == 400
     assert update_response.json()["detail"] == "Import id cannot be updated."
+
+
+async def test_delete_transaction_removes_lines(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    transaction = await create_transaction(async_client, budget_id, account_id)
+    transaction_id = transaction["id"]
+
+    await add_transaction_line(
+        UUID(transaction_id),
+        UUID(account_id),
+        amount_minor=-250,
+        memo="Extra line",
+    )
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(TransactionLinesTable).where(
+                TransactionLinesTable.transaction_id == UUID(transaction_id)
+            )
+        )
+        lines = result.scalars().all()
+        assert len(lines) == 2
+
+    delete_response = await async_client.delete(
+        f"/budgets/{budget_id}/transactions/{transaction_id}"
+    )
+
+    assert delete_response.status_code == 204
+
+    async with get_session_scope() as session:
+        transaction_row = await session.get(TransactionsTable, UUID(transaction_id))
+        assert transaction_row is None
+
+        result = await session.execute(
+            select(TransactionLinesTable).where(
+                TransactionLinesTable.transaction_id == UUID(transaction_id)
+            )
+        )
+        assert result.scalars().all() == []
+
+
+async def test_delete_transaction_from_another_budget_returns_404(
+    app, async_client
+) -> None:
+    first_budget_id = await create_budget(async_client)
+    second_budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, first_budget_id)
+
+    transaction = await create_transaction(async_client, first_budget_id, account_id)
+    transaction_id = transaction["id"]
+
+    delete_response = await async_client.delete(
+        f"/budgets/{second_budget_id}/transactions/{transaction_id}"
+    )
+
+    assert delete_response.status_code == 404
+    assert delete_response.json()["detail"] == "Transaction not found."
+
+    async with get_session_scope() as session:
+        transaction_row = await session.get(TransactionsTable, UUID(transaction_id))
+        assert transaction_row is not None

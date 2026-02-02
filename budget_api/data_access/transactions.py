@@ -182,6 +182,14 @@ class TransactionsDataAccess:
         await self._session.refresh(transaction)
         return _to_transaction(transaction)
 
+    async def delete_transaction(self, transaction_id: uuid.UUID) -> bool:
+        transaction = await self._session.get(TransactionsTable, transaction_id)
+        if transaction is None:
+            return False
+        await self._session.delete(transaction)
+        await self._session.flush()
+        return True
+
     async def update_transaction_lines(
         self, line_updates: Sequence[TransactionLineUpdate]
     ) -> None:

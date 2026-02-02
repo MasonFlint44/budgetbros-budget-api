@@ -27,5 +27,6 @@ from .transactions import (
     TransactionSplitCreate,
     TransactionStatus,
     TransactionUpdate,
+    TransferCreate,
 )
 from .users import User

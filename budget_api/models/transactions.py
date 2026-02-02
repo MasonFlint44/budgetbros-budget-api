@@ -32,6 +32,17 @@ class TransactionCreate(BaseModel):
     line: TransactionLineCreate
 
 
+class TransferCreate(BaseModel):
+    from_account_id: uuid.UUID
+    to_account_id: uuid.UUID
+    amount_minor: int
+    payee_id: uuid.UUID | None = None
+    posted_at: datetime | None = None
+    notes: str | None = Field(None, max_length=500)
+    memo: str | None = Field(None, max_length=300)
+    tag_ids: list[uuid.UUID] | None = None
+
+
 class TransactionSplitCreate(BaseModel):
     lines: list[TransactionLineCreate]
 

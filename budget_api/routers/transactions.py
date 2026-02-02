@@ -10,6 +10,7 @@ from budget_api.models import (
     TransactionResponse,
     TransactionSplitCreate,
     TransactionUpdate,
+    TransferCreate,
 )
 from budget_api.services import TransactionsService
 
@@ -26,6 +27,22 @@ async def create_transaction(
 ) -> Transaction:
     return await transactions_service.create_transaction(
         budget_id=budget.id,
+        payload=payload,
+    )
+
+
+@router.post(
+    "/transfer", response_model=TransactionResponse, status_code=status.HTTP_201_CREATED
+)
+async def create_transfer(
+    payload: TransferCreate,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to create transactions.")
+    ),
+    transactions_service: TransactionsService = Depends(),
+) -> Transaction:
+    return await transactions_service.create_transfer(
+        budget=budget,
         payload=payload,
     )
 

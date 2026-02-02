@@ -763,6 +763,103 @@ async def test_split_transaction_rejects_transfer(app, async_client) -> None:
     assert response.json()["detail"] == "Transfer transactions cannot be split."
 
 
+async def test_transfer_creates_two_lines(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    from_account_id = await create_account(async_client, budget_id)
+    to_account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/transfer",
+        json={
+            "from_account_id": from_account_id,
+            "to_account_id": to_account_id,
+            "amount_minor": -750,
+            "notes": "Move",
+            "memo": "Savings",
+        },
+    )
+
+    assert response.status_code == 201
+    payload = response.json()
+    assert payload["budget_id"] == budget_id
+    assert payload["status"] == "posted"
+    assert payload["notes"] == "Move"
+    assert payload["lines"]
+    assert len(payload["lines"]) == 2
+
+    lines_by_account = {line["account_id"]: line for line in payload["lines"]}
+    assert set(lines_by_account.keys()) == {from_account_id, to_account_id}
+
+    from_line = lines_by_account[from_account_id]
+    to_line = lines_by_account[to_account_id]
+    assert from_line["amount_minor"] == -750
+    assert to_line["amount_minor"] == 750
+    assert from_line["category_id"] is None
+    assert to_line["category_id"] is None
+    assert from_line["payee_id"] is None
+    assert to_line["payee_id"] is None
+    assert from_line["memo"] == "Savings"
+    assert to_line["memo"] == "Savings"
+    assert from_line["tag_ids"] == []
+    assert to_line["tag_ids"] == []
+    assert sum(line["amount_minor"] for line in payload["lines"]) == 0
+
+
+async def test_transfer_rejects_same_account(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/transfer",
+        json={
+            "from_account_id": account_id,
+            "to_account_id": account_id,
+            "amount_minor": -500,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Transfer accounts must be distinct."
+
+
+async def test_transfer_rejects_zero_amount(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    from_account_id = await create_account(async_client, budget_id)
+    to_account_id = await create_account(async_client, budget_id)
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/transfer",
+        json={
+            "from_account_id": from_account_id,
+            "to_account_id": to_account_id,
+            "amount_minor": 0,
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Amount must be non-zero."
+
+
+async def test_transfer_rejects_payee_id(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    from_account_id = await create_account(async_client, budget_id)
+    to_account_id = await create_account(async_client, budget_id)
+    payee_id = await create_payee(UUID(budget_id))
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/transfer",
+        json={
+            "from_account_id": from_account_id,
+            "to_account_id": to_account_id,
+            "amount_minor": -500,
+            "payee_id": str(payee_id),
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "Payee not allowed for transfers."
+
+
 async def test_delete_transaction_removes_lines(app, async_client) -> None:
     budget_id = await create_budget(async_client)
     account_id = await create_account(async_client, budget_id)

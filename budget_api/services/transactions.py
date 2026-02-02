@@ -9,6 +9,7 @@ from fastapi import Depends, HTTPException, status
 
 from budget_api.data_access import AccountsDataAccess, TransactionsDataAccess
 from budget_api.models import (
+    Budget,
     Transaction,
     TransactionCreate,
     TransactionLineDraft,
@@ -16,6 +17,7 @@ from budget_api.models import (
     TransactionSplitCreate,
     TransactionStatus,
     TransactionUpdate,
+    TransferCreate,
 )
 
 
@@ -227,6 +229,99 @@ class TransactionsService:
                     memo=line.memo,
                     tag_ids=tag_ids,
                 )
+            ],
+        )
+
+        return Transaction(
+            id=transaction.id,
+            budget_id=transaction.budget_id,
+            posted_at=transaction.posted_at,
+            status=transaction.status,
+            notes=transaction.notes,
+            import_id=transaction.import_id,
+            created_at=transaction.created_at,
+            lines=lines,
+        )
+
+    async def create_transfer(
+        self,
+        *,
+        budget: Budget,
+        payload: TransferCreate,
+    ) -> Transaction:
+        if payload.amount_minor == 0:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Amount must be non-zero.",
+            )
+        transfer_amount = abs(payload.amount_minor)
+        if payload.from_account_id == payload.to_account_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Transfer accounts must be distinct.",
+            )
+        if payload.payee_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Payee not allowed for transfers.",
+            )
+
+        from_account = await self._accounts_store.get_account(
+            payload.from_account_id
+        )
+        if from_account is None or from_account.budget_id != budget.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account not found.",
+            )
+
+        to_account = await self._accounts_store.get_account(payload.to_account_id)
+        if to_account is None or to_account.budget_id != budget.id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account not found.",
+            )
+
+        if (
+            from_account.currency_code != budget.base_currency_code
+            or to_account.currency_code != budget.base_currency_code
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Account currency must match budget base currency.",
+            )
+
+        tag_ids = await self._require_tags(budget.id, payload.tag_ids or [])
+        posted_at = _normalize_posted_at(payload.posted_at)
+        normalized_status = _normalize_status(None)
+
+        transaction = await self._transactions_store.create_transaction(
+            budget_id=budget.id,
+            posted_at=posted_at,
+            status=normalized_status,
+            notes=payload.notes,
+            import_id=None,
+        )
+
+        lines = await self._transactions_store.create_transaction_lines(
+            transaction.id,
+            [
+                TransactionLineDraft(
+                    account_id=payload.from_account_id,
+                    category_id=None,
+                    payee_id=None,
+                    amount_minor=-transfer_amount,
+                    memo=payload.memo,
+                    tag_ids=tag_ids,
+                ),
+                TransactionLineDraft(
+                    account_id=payload.to_account_id,
+                    category_id=None,
+                    payee_id=None,
+                    amount_minor=transfer_amount,
+                    memo=payload.memo,
+                    tag_ids=tag_ids,
+                ),
             ],
         )
 

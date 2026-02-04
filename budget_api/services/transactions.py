@@ -11,7 +11,9 @@ from budget_api.data_access import AccountsDataAccess, TransactionsDataAccess
 from budget_api.models import (
     Budget,
     Transaction,
+    TransactionBulkCreate,
     TransactionCreate,
+    TransactionImportSummary,
     TransactionLineDraft,
     TransactionLineUpdate,
     TransactionSplitCreate,
@@ -64,6 +66,15 @@ class LineSnapshot:
     amount_minor: int
     memo: str | None
     tag_ids: list[uuid.UUID]
+
+
+@dataclass(slots=True)
+class BulkImportItem:
+    posted_at: datetime
+    status: TransactionStatus
+    notes: str | None
+    import_id: str | None
+    line: TransactionLineDraft
 
 
 def _is_valid_transfer(lines: list[LineSnapshot]) -> bool:
@@ -241,6 +252,122 @@ class TransactionsService:
             import_id=transaction.import_id,
             created_at=transaction.created_at,
             lines=lines,
+        )
+
+    async def bulk_import_transactions(
+        self,
+        *,
+        budget_id: uuid.UUID,
+        payload: TransactionBulkCreate,
+    ) -> TransactionImportSummary:
+        import_id_to_indices: dict[str, list[int]] = {}
+        for index, item in enumerate(payload.transactions):
+            if item.import_id is None:
+                continue
+            import_id_to_indices.setdefault(item.import_id, []).append(index)
+
+        duplicate_errors: list[dict[str, object]] = []
+        for indices in import_id_to_indices.values():
+            if len(indices) < 2:
+                continue
+            for index in indices:
+                duplicate_errors.append(
+                    {"index": index, "detail": "Duplicate import_id."}
+                )
+
+        if duplicate_errors:
+            duplicate_errors.sort(key=lambda error: int(error["index"]))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=duplicate_errors,
+            )
+
+        existing_import_ids = await self._transactions_store.list_existing_import_ids(
+            budget_id, list(import_id_to_indices.keys())
+        )
+
+        prepared: list[BulkImportItem] = []
+        errors: list[dict[str, object]] = []
+        existing_count = 0
+
+        account_cache: dict[uuid.UUID, bool] = {}
+        category_cache: dict[uuid.UUID, bool] = {}
+        payee_cache: dict[uuid.UUID, bool] = {}
+
+        for index, item in enumerate(payload.transactions):
+            if (
+                item.import_id is not None
+                and item.import_id in existing_import_ids
+            ):
+                existing_count += 1
+                continue
+            try:
+                line = item.line
+                if line.amount_minor == 0:
+                    raise HTTPException(
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                        detail="Amount must be non-zero.",
+                    )
+
+                await self._require_account(
+                    budget_id, line.account_id, cache=account_cache
+                )
+
+                if line.category_id is not None:
+                    await self._require_category(
+                        budget_id, line.category_id, cache=category_cache
+                    )
+
+                if line.payee_id is not None:
+                    await self._require_payee(
+                        budget_id, line.payee_id, cache=payee_cache
+                    )
+
+                tag_ids = await self._require_tags(
+                    budget_id, line.tag_ids or []
+                )
+
+                prepared.append(
+                    BulkImportItem(
+                        posted_at=_normalize_posted_at(item.posted_at),
+                        status=_normalize_status(item.status),
+                        notes=item.notes,
+                        import_id=item.import_id,
+                        line=TransactionLineDraft(
+                            account_id=line.account_id,
+                            category_id=line.category_id,
+                            payee_id=line.payee_id,
+                            amount_minor=line.amount_minor,
+                            memo=line.memo,
+                            tag_ids=tag_ids,
+                        ),
+                    )
+                )
+            except HTTPException as exc:
+                errors.append({"index": index, "detail": exc.detail})
+
+        if errors:
+            errors.sort(key=lambda error: int(error["index"]))
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=errors,
+            )
+
+        for item in prepared:
+            transaction = await self._transactions_store.create_transaction(
+                budget_id=budget_id,
+                posted_at=item.posted_at,
+                status=item.status,
+                notes=item.notes,
+                import_id=item.import_id,
+            )
+            await self._transactions_store.create_transaction_lines(
+                transaction.id, [item.line]
+            )
+
+        return TransactionImportSummary(
+            created_count=len(prepared),
+            existing_count=existing_count,
         )
 
     async def create_transfer(

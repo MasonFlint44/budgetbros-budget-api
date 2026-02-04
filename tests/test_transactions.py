@@ -921,3 +921,141 @@ async def test_delete_transaction_from_another_budget_returns_404(
     async with get_session_scope() as session:
         transaction_row = await session.get(TransactionsTable, UUID(transaction_id))
         assert transaction_row is not None
+
+
+async def test_bulk_import_transactions_all_new(app, async_client) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    first_import_id = f"import-{uuid4()}"
+    second_import_id = f"import-{uuid4()}"
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/import",
+        json={
+            "transactions": [
+                {
+                    "import_id": first_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -500,
+                    },
+                },
+                {
+                    "import_id": second_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -750,
+                    },
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 201
+    assert response.json() == {"created_count": 2, "existing_count": 0}
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(TransactionsTable).where(
+                TransactionsTable.budget_id == UUID(budget_id),
+                TransactionsTable.import_id.in_(
+                    [first_import_id, second_import_id]
+                ),
+            )
+        )
+        assert len(result.scalars().all()) == 2
+
+
+async def test_bulk_import_transactions_skips_existing_import_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    existing_import_id = f"import-{uuid4()}"
+    create_response = await async_client.post(
+        f"/budgets/{budget_id}/transactions",
+        json={
+            "import_id": existing_import_id,
+            "line": {
+                "account_id": account_id,
+                "amount_minor": -500,
+            },
+        },
+    )
+    assert create_response.status_code == 201
+
+    new_import_id = f"import-{uuid4()}"
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/import",
+        json={
+            "transactions": [
+                {
+                    "import_id": existing_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -600,
+                    },
+                },
+                {
+                    "import_id": new_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -700,
+                    },
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"created_count": 1, "existing_count": 1}
+
+    async with get_session_scope() as session:
+        result = await session.execute(
+            select(TransactionsTable).where(
+                TransactionsTable.budget_id == UUID(budget_id),
+                TransactionsTable.import_id.in_(
+                    [existing_import_id, new_import_id]
+                ),
+            )
+        )
+        assert len(result.scalars().all()) == 2
+
+
+async def test_bulk_import_transactions_rejects_duplicate_import_id(
+    app, async_client
+) -> None:
+    budget_id = await create_budget(async_client)
+    account_id = await create_account(async_client, budget_id)
+
+    duplicate_import_id = f"import-{uuid4()}"
+
+    response = await async_client.post(
+        f"/budgets/{budget_id}/transactions/import",
+        json={
+            "transactions": [
+                {
+                    "import_id": duplicate_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -500,
+                    },
+                },
+                {
+                    "import_id": duplicate_import_id,
+                    "line": {
+                        "account_id": account_id,
+                        "amount_minor": -600,
+                    },
+                },
+            ]
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == [
+        {"index": 0, "detail": "Duplicate import_id."},
+        {"index": 1, "detail": "Duplicate import_id."},
+    ]

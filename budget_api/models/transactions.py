@@ -32,6 +32,15 @@ class TransactionCreate(BaseModel):
     line: TransactionLineCreate
 
 
+class TransactionBulkCreate(BaseModel):
+    transactions: list[TransactionCreate]
+
+
+class TransactionImportSummary(BaseModel):
+    created_count: int
+    existing_count: int
+
+
 class TransferCreate(BaseModel):
     from_account_id: uuid.UUID
     to_account_id: uuid.UUID

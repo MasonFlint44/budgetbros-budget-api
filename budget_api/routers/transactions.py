@@ -1,12 +1,14 @@
 import uuid
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Response, status
 
 from budget_api.dependencies import require_budget_member
 from budget_api.models import (
     Budget,
     Transaction,
+    TransactionBulkCreate,
     TransactionCreate,
+    TransactionImportSummary,
     TransactionResponse,
     TransactionSplitCreate,
     TransactionUpdate,
@@ -29,6 +31,28 @@ async def create_transaction(
         budget_id=budget.id,
         payload=payload,
     )
+
+
+@router.post(
+    "/import",
+    response_model=TransactionImportSummary,
+    status_code=status.HTTP_201_CREATED,
+)
+async def bulk_import_transactions(
+    payload: TransactionBulkCreate,
+    response: Response,
+    budget: Budget = Depends(
+        require_budget_member("Not authorized to create transactions.")
+    ),
+    transactions_service: TransactionsService = Depends(),
+) -> TransactionImportSummary:
+    summary = await transactions_service.bulk_import_transactions(
+        budget_id=budget.id,
+        payload=payload,
+    )
+    if summary.existing_count:
+        response.status_code = status.HTTP_200_OK
+    return summary
 
 
 @router.post(

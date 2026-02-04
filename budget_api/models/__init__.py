@@ -17,7 +17,9 @@ from .budgets import (
 from .currencies import Currency, CurrencyResponse
 from .transactions import (
     Transaction,
+    TransactionBulkCreate,
     TransactionCreate,
+    TransactionImportSummary,
     TransactionLine,
     TransactionLineCreate,
     TransactionLineDraft,

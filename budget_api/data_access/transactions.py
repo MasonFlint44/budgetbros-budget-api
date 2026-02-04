@@ -119,6 +119,19 @@ class TransactionsDataAccess:
         )
         return set(result.scalars().all())
 
+    async def list_existing_import_ids(
+        self, budget_id: uuid.UUID, import_ids: Sequence[str]
+    ) -> set[str]:
+        if not import_ids:
+            return set()
+        result = await self._session.execute(
+            select(TransactionsTable.import_id).where(
+                TransactionsTable.budget_id == budget_id,
+                TransactionsTable.import_id.in_(import_ids),
+            )
+        )
+        return set(result.scalars().all())
+
     async def list_transactions(
         self, budget_id: uuid.UUID, *, include_lines: bool = True
     ) -> list[Transaction]:

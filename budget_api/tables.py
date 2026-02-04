@@ -13,6 +13,7 @@ from sqlalchemy import (
     Integer,
     String,
     UniqueConstraint,
+    desc,
     func,
 )
 from sqlalchemy.dialects.postgresql import UUID
@@ -288,7 +289,13 @@ class TransactionsTable(Base):
     )
 
     __table_args__ = (
-        Index("ix_transactions_budget_posted_at", "budget_id", "posted_at"),
+        Index(
+            "ix_transactions_budget_posted_created_id",
+            "budget_id",
+            desc("posted_at"),
+            desc("created_at"),
+            desc("id"),
+        ),
         UniqueConstraint(
             "budget_id", "import_id", name="uq_transactions_budget_import_id"
         ),

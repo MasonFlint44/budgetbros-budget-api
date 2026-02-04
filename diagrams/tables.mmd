@@ -27,6 +27,9 @@ erDiagram
     uuid user_id FK
     datetime created_at
   }
+  %% INDEXES
+  %% ix_budget_members_user_id (user_id)
+  %% ix_budget_members_budget_id (budget_id)
 
   ACCOUNTS {
     uuid id PK
@@ -37,6 +40,8 @@ erDiagram
     bool is_active
     datetime created_at
   }
+  %% INDEXES
+  %% ix_accounts_budget_id (budget_id)
 
   CATEGORIES {
     uuid id PK
@@ -47,6 +52,9 @@ erDiagram
     bool is_archived
     int sort_order
   }
+  %% INDEXES
+  %% ix_categories_budget_id (budget_id)
+  %% ix_categories_parent_id (parent_id)
 
   PAYEES {
     uuid id PK
@@ -54,6 +62,8 @@ erDiagram
     string name
     bool is_archived
   }
+  %% INDEXES
+  %% ix_payees_budget_id (budget_id)
 
   TRANSACTIONS {
     uuid id PK
@@ -64,6 +74,8 @@ erDiagram
     string import_id
     datetime created_at
   }
+  %% INDEXES
+  %% ix_transactions_budget_posted_created_id (budget_id, posted_at desc, created_at desc, id desc)
 
   TRANSACTION_LINES {
     uuid id PK
@@ -74,18 +86,27 @@ erDiagram
     int amount_minor
     string memo
   }
+  %% INDEXES
+  %% ix_transaction_lines_transaction_id (transaction_id)
+  %% ix_transaction_lines_account_id (account_id)
+  %% ix_transaction_lines_category_id (category_id)
+  %% ix_transaction_lines_payee_id (payee_id)
 
   TAGS {
     uuid id PK
     uuid budget_id FK
     string name
   }
+  %% INDEXES
+  %% ix_tags_budget_id (budget_id)
 
   TRANSACTION_LINE_TAGS {
     uuid line_id PK, FK
     uuid tag_id PK, FK
     datetime created_at
   }
+  %% INDEXES
+  %% ix_transaction_line_tags_tag_id (tag_id)
 
   CURRENCIES ||--o{ BUDGETS : base_currency_code
   CURRENCIES ||--o{ ACCOUNTS : currency_code

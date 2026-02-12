@@ -14,6 +14,12 @@ from .budgets import (
     BudgetResponse,
     BudgetUpdate,
 )
+from .categories import (
+    Category,
+    CategoryCreate,
+    CategoryResponse,
+    CategoryUpdate,
+)
 from .currencies import Currency, CurrencyResponse
 from .transactions import (
     Transaction,

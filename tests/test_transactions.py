@@ -45,7 +45,6 @@ async def create_category(budget_id: UUID) -> UUID:
                 id=category_id,
                 budget_id=budget_id,
                 name=f"Category-{category_id}",
-                kind="expense",
                 parent_id=None,
                 is_archived=False,
                 sort_order=0,

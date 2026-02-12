@@ -201,9 +201,6 @@ class CategoriesTable(Base):
 
     name: Mapped[str] = mapped_column(String(120), nullable=False)
 
-    # "expense" or "income" is usually enough for v1
-    kind: Mapped[str] = mapped_column(String(10), nullable=False, default="expense")
-
     parent_id: Mapped[Optional[uuid.UUID]] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("categories.id", ondelete="SET NULL"),

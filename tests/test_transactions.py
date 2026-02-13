@@ -62,7 +62,6 @@ async def create_payee(budget_id: UUID) -> UUID:
                 id=payee_id,
                 budget_id=budget_id,
                 name=f"Payee-{payee_id}",
-                is_archived=False,
             )
         )
         await session.flush()

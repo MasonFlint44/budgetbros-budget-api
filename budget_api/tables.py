@@ -239,7 +239,6 @@ class PayeesTable(Base):
     )
 
     name: Mapped[str] = mapped_column(String(160), nullable=False)
-    is_archived: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 
     budget: Mapped["BudgetsTable"] = relationship(back_populates="payees")
     lines: Mapped[List["TransactionLinesTable"]] = relationship(back_populates="payee")

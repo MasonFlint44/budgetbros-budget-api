@@ -2,7 +2,7 @@
 
 ## Scope
 Add budget-scoped payee CRUD endpoints for `payees` table fields:
-- `id`, `budget_id`, `name`, `is_archived`
+- `id`, `budget_id`, `name`
 
 ## Endpoints
 - `POST /budgets/{budget_id}/payees`
@@ -13,8 +13,8 @@ Add budget-scoped payee CRUD endpoints for `payees` table fields:
 
 ## Contract
 - Request models:
-  - `PayeeCreate`: `name`, `is_archived`.
-  - `PayeeUpdate`: optional `name`, optional `is_archived`.
+  - `PayeeCreate`: `name`.
+  - `PayeeUpdate`: optional `name`.
 - Response model:
   - `PayeeResponse` with all table-backed fields.
 - Domain model:
@@ -23,7 +23,6 @@ Add budget-scoped payee CRUD endpoints for `payees` table fields:
 ## Business Rules
 - Names must be unique per budget (`409` on duplicate).
 - `PATCH` uses `extract_updates` for empty/null behavior consistency.
-- `is_archived` controls visibility in clients, but payee remains referenceable until deleted.
 - Hard delete is allowed; transaction lines should retain row integrity via FK `ON DELETE SET NULL`.
 
 ## File-Level Implementation

@@ -4,7 +4,14 @@ from fastapi import FastAPI, Depends
 
 from budget_api import db
 from budget_api.auth import verifier, get_or_create_current_user
-from budget_api.routers import accounts, budgets, categories, currencies, transactions
+from budget_api.routers import (
+    accounts,
+    budgets,
+    categories,
+    currencies,
+    payees,
+    transactions,
+)
 from budget_api.data_access import CurrenciesDataAccess
 from budget_api.data import CURRENCIES
 
@@ -28,6 +35,7 @@ app = FastAPI(
 app.include_router(budgets.router, tags=["budgets"])
 app.include_router(accounts.router, tags=["accounts"])
 app.include_router(categories.router, tags=["categories"])
+app.include_router(payees.router, tags=["payees"])
 app.include_router(currencies.router, tags=["currencies"])
 app.include_router(transactions.router, tags=["transactions"])
 

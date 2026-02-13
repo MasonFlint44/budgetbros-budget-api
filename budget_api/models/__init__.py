@@ -21,6 +21,7 @@ from .categories import (
     CategoryUpdate,
 )
 from .currencies import Currency, CurrencyResponse
+from .payees import Payee, PayeeCreate, PayeeResponse, PayeeUpdate
 from .transactions import (
     Transaction,
     TransactionBulkCreate,

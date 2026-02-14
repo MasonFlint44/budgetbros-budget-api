@@ -12,6 +12,7 @@ from budget_api.routers import (
     payees,
     tags,
     transactions,
+    users,
 )
 from budget_api.data_access import CurrenciesDataAccess
 from budget_api.data import CURRENCIES
@@ -40,6 +41,7 @@ app.include_router(payees.router, tags=["payees"])
 app.include_router(tags.router, tags=["tags"])
 app.include_router(currencies.router, tags=["currencies"])
 app.include_router(transactions.router, tags=["transactions"])
+app.include_router(users.router, tags=["users"])
 
 
 @app.get("/")

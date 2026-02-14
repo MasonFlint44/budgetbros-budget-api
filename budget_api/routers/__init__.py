@@ -5,3 +5,4 @@ from budget_api.routers.currencies import router as currencies_router
 from budget_api.routers.payees import router as payees_router
 from budget_api.routers.tags import router as tags_router
 from budget_api.routers.transactions import router as transactions_router
+from budget_api.routers.users import router as users_router

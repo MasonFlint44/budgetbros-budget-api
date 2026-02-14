@@ -39,4 +39,4 @@ from .transactions import (
     TransactionUpdate,
     TransferCreate,
 )
-from .users import User
+from .users import User, UserResponse

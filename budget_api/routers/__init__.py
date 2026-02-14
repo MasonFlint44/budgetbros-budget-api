@@ -3,4 +3,5 @@ from budget_api.routers.budgets import router as budgets_router
 from budget_api.routers.categories import router as categories_router
 from budget_api.routers.currencies import router as currencies_router
 from budget_api.routers.payees import router as payees_router
+from budget_api.routers.tags import router as tags_router
 from budget_api.routers.transactions import router as transactions_router
